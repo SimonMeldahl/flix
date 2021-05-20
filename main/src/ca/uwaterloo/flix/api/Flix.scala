@@ -27,6 +27,7 @@ import ca.uwaterloo.flix.util.vt.TerminalContext
 
 import java.nio.charset.Charset
 import java.nio.file.{Files, Path, Paths}
+import java.security.DrbgParameters.Capability
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
@@ -333,7 +334,8 @@ class Flix {
         PatternExhaustiveness |>
         Redundancy |>
         Linter |>
-        Safety
+        Safety |>
+        GuardInferer
 
     // Apply the pipeline to the parsed AST.
     val result = pipeline.run(getInputs)(this)
