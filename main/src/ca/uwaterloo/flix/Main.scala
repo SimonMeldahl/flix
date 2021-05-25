@@ -101,6 +101,7 @@ object Main {
       xnoboolunification = cmdOpts.xnoboolunification,
       xnostratifier = cmdOpts.xnostratifier,
       xstatistics = cmdOpts.xstatistics,
+      xinterpreter = cmdOpts.xinterpreter,
     )
 
     // check if command was passed.
@@ -178,7 +179,48 @@ object Main {
       flix.addPath(file.toPath)
     }
 
+    // evaluate main.
     if (cmdOpts.xinterpreter) {
+      try {
+        //TODO(LBS) chump timer
+        val timer = new Timer(flix.interpret())
+        timer.getResult match {
+          case Validation.Success(compilationResult) =>
+            // Compute the arguments to be passed to main.
+            val args: Array[String] = cmdOpts.args match {
+              case None => Array.empty
+              case Some(a) => a.split(" ")
+            }
+            // Invoke main with the supplied arguments.
+            val exitCode = compilationResult(args)
+
+            // Exit with the returned exit code.
+            System.exit(exitCode)
+
+            //TODO(LBS) no benchmarks or test here
+//            if (cmdOpts.benchmark) {
+//              Benchmarker.benchmark(compilationResult, new PrintWriter(System.out, true))(options)
+//            }
+//
+//            if (cmdOpts.test) {
+//              val results = Tester.test(compilationResult)
+//              Console.println(results.output.fmt)
+//            }
+          case Validation.Failure(errors) =>
+            errors.sortBy(_.source.name).foreach(e => println(e.message.fmt))
+            println()
+            println(s"Compilation failed with ${errors.length} error(s).")
+            System.exit(1)
+        }
+      } catch {
+        case ex: FlixError =>
+          Console.err.println(ex.getMessage)
+          Console.err.println()
+          ex.printStackTrace()
+          System.exit(1)
+      }
+    }
+    else {
       try {
         val timer = new Timer(flix.compile())
         timer.getResult match {
@@ -220,51 +262,8 @@ object Main {
           ex.printStackTrace()
           System.exit(1)
       }
+
     }
-
-    // evaluate main.
-    try {
-      val timer = new Timer(flix.compile())
-      timer.getResult match {
-        case Validation.Success(compilationResult) =>
-
-          compilationResult.getMain match {
-            case None => // nop
-            case Some(m) =>
-              // Compute the arguments to be passed to main.
-              val args: Array[String] = cmdOpts.args match {
-                case None => Array.empty
-                case Some(a) => a.split(" ")
-              }
-              // Invoke main with the supplied arguments.
-              val exitCode = m(args)
-
-              // Exit with the returned exit code.
-              System.exit(exitCode)
-          }
-
-          if (cmdOpts.benchmark) {
-            Benchmarker.benchmark(compilationResult, new PrintWriter(System.out, true))(options)
-          }
-
-          if (cmdOpts.test) {
-            val results = Tester.test(compilationResult)
-            Console.println(results.output.fmt)
-          }
-        case Validation.Failure(errors) =>
-          errors.sortBy(_.source.name).foreach(e => println(e.message.fmt))
-          println()
-          println(s"Compilation failed with ${errors.length} error(s).")
-          System.exit(1)
-      }
-    } catch {
-      case ex: FlixError =>
-        Console.err.println(ex.getMessage)
-        Console.err.println()
-        ex.printStackTrace()
-        System.exit(1)
-    }
-
   }
 
   /**
@@ -465,7 +464,7 @@ object Main {
         text("[experimental] prints statistics about the compilation.")
 
       // Xinterpreter
-      opt[Unit]("interpreter").action((_, c) => c.copy(xinterpreter = true))
+      opt[Unit]("Xinterpreter").action((_, c) => c.copy(xinterpreter = true))
 
       note("")
 
