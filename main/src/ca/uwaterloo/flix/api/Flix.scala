@@ -335,8 +335,7 @@ class Flix {
         PatternExhaustiveness |>
         Redundancy |>
         Linter |>
-        Safety |>
-        KInferer
+        Safety
 
     // Apply the pipeline to the parsed AST.
     val result = pipeline.run(getInputs)(this)
