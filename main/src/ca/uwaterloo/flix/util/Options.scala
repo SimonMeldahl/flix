@@ -110,7 +110,7 @@ case class Options(core: Boolean,
                    xlinter: Boolean,
                    xnoboolunification: Boolean,
                    xnostratifier: Boolean,
-                   xstatistics: Boolean
+                   xstatistics: Boolean,
                   )
 
 /**

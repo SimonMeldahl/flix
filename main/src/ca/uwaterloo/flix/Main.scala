@@ -29,13 +29,13 @@ import ca.uwaterloo.flix.util.vt._
 import flix.runtime.FlixError
 
 /**
-  * The main entry point for the Flix compiler and runtime.
-  */
+ * The main entry point for the Flix compiler and runtime.
+ */
 object Main {
 
   /**
-    * The main method.
-    */
+   * The main method.
+   */
   def main(argv: Array[String]): Unit = {
 
     // parse command line options.
@@ -100,7 +100,7 @@ object Main {
       xlinter = cmdOpts.xlinter,
       xnoboolunification = cmdOpts.xnoboolunification,
       xnostratifier = cmdOpts.xnostratifier,
-      xstatistics = cmdOpts.xstatistics
+      xstatistics = cmdOpts.xstatistics,
     )
 
     // check if command was passed.
@@ -178,6 +178,50 @@ object Main {
       flix.addPath(file.toPath)
     }
 
+    if (cmdOpts.xinterpreter) {
+      try {
+        val timer = new Timer(flix.compile())
+        timer.getResult match {
+          case Validation.Success(compilationResult) =>
+
+            compilationResult.getMain match {
+              case None => // nop
+              case Some(m) =>
+                // Compute the arguments to be passed to main.
+                val args: Array[String] = cmdOpts.args match {
+                  case None => Array.empty
+                  case Some(a) => a.split(" ")
+                }
+                // Invoke main with the supplied arguments.
+                val exitCode = m(args)
+
+                // Exit with the returned exit code.
+                System.exit(exitCode)
+            }
+
+            if (cmdOpts.benchmark) {
+              Benchmarker.benchmark(compilationResult, new PrintWriter(System.out, true))(options)
+            }
+
+            if (cmdOpts.test) {
+              val results = Tester.test(compilationResult)
+              Console.println(results.output.fmt)
+            }
+          case Validation.Failure(errors) =>
+            errors.sortBy(_.source.name).foreach(e => println(e.message.fmt))
+            println()
+            println(s"Compilation failed with ${errors.length} error(s).")
+            System.exit(1)
+        }
+      } catch {
+        case ex: FlixError =>
+          Console.err.println(ex.getMessage)
+          Console.err.println()
+          ex.printStackTrace()
+          System.exit(1)
+      }
+    }
+
     // evaluate main.
     try {
       val timer = new Timer(flix.compile())
@@ -224,8 +268,8 @@ object Main {
   }
 
   /**
-    * A case class representing the parsed command line options.
-    */
+   * A case class representing the parsed command line options.
+   */
   case class CmdOpts(command: Command = Command.None,
                      args: Option[String] = None,
                      benchmark: Boolean = false,
@@ -251,11 +295,12 @@ object Main {
                      xnostratifier: Boolean = false,
                      xnotailcalls: Boolean = false,
                      xstatistics: Boolean = false,
+                     xinterpreter: Boolean = false,
                      files: Seq[File] = Seq())
 
   /**
-    * A case class representing possible commands.
-    */
+   * A case class representing possible commands.
+   */
   sealed trait Command
 
   object Command {
@@ -281,10 +326,10 @@ object Main {
   }
 
   /**
-    * Parse command line options.
-    *
-    * @param args the arguments array.
-    */
+   * Parse command line options.
+   *
+   * @param args the arguments array.
+   */
   def parseCmdOpts(args: Array[String]): Option[CmdOpts] = {
     val parser = new scopt.OptionParser[CmdOpts]("flix") {
 
@@ -418,6 +463,9 @@ object Main {
       // Xstatistics
       opt[Unit]("Xstatistics").action((_, c) => c.copy(xstatistics = true)).
         text("[experimental] prints statistics about the compilation.")
+
+      // Xinterpreter
+      opt[Unit]("interpreter").action((_, c) => c.copy(xinterpreter = true))
 
       note("")
 

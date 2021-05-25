@@ -389,6 +389,11 @@ class Flix {
       case typedAst => codeGen(typedAst)
     }
 
+  def interpret(): Validation[???, CompilationError] =
+    check() flatMap (
+      typedAst => evaluate(typedAst)
+    )
+
   /**
     * Enters the phase with the given name.
     */
