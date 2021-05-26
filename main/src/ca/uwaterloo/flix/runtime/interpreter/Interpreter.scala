@@ -37,8 +37,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         if (defn.formals.length != 1) {
           return Validation.Failure(LazyList(new InterpreterError("main wrong args", defn.loc)))
         }
-        // TODO(LBS) cannot use main arguments (test if it works hehehehehehehehehehehehe xD)
-        (args: Array[String]) => eval(defn.exp, Map() + (defn.formals.head.sym.text -> args), Map(), root).asInstanceOf[Value.Int32].lit
+        (args: Array[String]) => eval(defn.exp, Map() + (defn.formals.head.sym.toString -> Value.Arr(args.map(a => Value.Str(a)), MonoType.Array(MonoType.Str))), Map(), root).asInstanceOf[Value.Int32].lit
     }
 
     r match {
