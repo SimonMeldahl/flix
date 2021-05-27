@@ -16,7 +16,10 @@
 
 package ca.uwaterloo.flix.runtime.interpreter
 
-import ca.uwaterloo.flix.language.ast.{Symbol, MonoType}
+import ca.uwaterloo.flix.api.Flix
+import ca.uwaterloo.flix.language.ast.FinalAst.{Expression, Root}
+import ca.uwaterloo.flix.language.ast.FinalAst.Expression.KLabel
+import ca.uwaterloo.flix.language.ast.{FinalAst, MonoType, Symbol}
 import ca.uwaterloo.flix.util.InternalRuntimeException
 
 sealed trait Value

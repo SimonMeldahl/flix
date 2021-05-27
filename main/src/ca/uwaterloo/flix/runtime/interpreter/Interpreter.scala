@@ -259,6 +259,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       c.put(e)
       c
 
+    //TODO(LBS) husk
     case Expression.SelectChannel(rules, default, tpe, loc) =>
       // Evaluate all Channel expressions
       val rs = rules.map {
@@ -310,7 +311,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     case Expression.Null(_, _) => ???
 
-    case Expression.K(exp, from, to, tpe, loc) => ???
+    case Expression.K(exp, from, to, tpe, loc) => reduceK(from, to, eval(exp, env0, lenv0, root, from))
   }
 
   /**
@@ -640,6 +641,11 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     // Lookup the definition.
     val defn = root.defs(sym)
 
+    val toLabel = currentLabel
+    val fromLabel = defn.sym.namespace
+    val hasLabelChanged = fromLabel != toLabel
+    def kWrapArg(a: AnyRef): AnyRef = if (hasLabelChanged) reduceK(toLabel, fromLabel, a) else a
+
     // Evaluate the arguments.
     val as = evalArgs(args, env0, lenv0, root)
 
@@ -650,6 +656,12 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     // Evaluate the body expression under the new local variable environment and an empty label environment.
     eval(defn.exp, env, Map.empty, root)
+  }
+
+  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = {println(value.getClass); value} match {
+    case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Arr => value
+    case _: Channel | _: Value.Guard => Value.Guard(value, fromLabel, toLabel)
+    case _: Value.Closure | _: Value.Lambda => Value.Lambda(value, fromLabel, toLabel)
   }
 
   /**
