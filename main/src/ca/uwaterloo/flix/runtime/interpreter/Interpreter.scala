@@ -254,10 +254,14 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       c.get()
 
     case Expression.PutChannel(exp1, exp2, tpe, loc) =>
-      val c = eval(exp1, env0, lenv0, root).asInstanceOf[Channel]
-      val e = eval(exp2, env0, lenv0, root)
-      c.put(e)
-      c
+      val e1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val c: Channel = e1 match {
+        case c: Channel => c
+        case g: Guard => g.getChannel
+      }
+      val e2 = eval(exp2, env0, lenv0, root, currentLabel)
+      c.put(e2)
+      e1
 
     //TODO(LBS) husk
     case Expression.SelectChannel(rules, default, tpe, loc) =>
@@ -644,7 +648,6 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     val toLabel = currentLabel
     val fromLabel = defn.sym.namespace
     val hasLabelChanged = fromLabel != toLabel
-    def kWrapArg(a: AnyRef): AnyRef = if (hasLabelChanged) reduceK(toLabel, fromLabel, a) else a
 
     // Evaluate the arguments.
     val as = evalArgs(args, env0, lenv0, root)
@@ -658,7 +661,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     eval(defn.exp, env, Map.empty, root)
   }
 
-  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = {println(value.getClass); value} match {
+  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = value match {
     case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Arr => value
     case _: Channel | _: Value.Guard => Value.Guard(value, fromLabel, toLabel)
     case _: Value.Closure | _: Value.Lambda => Value.Lambda(value, fromLabel, toLabel)
