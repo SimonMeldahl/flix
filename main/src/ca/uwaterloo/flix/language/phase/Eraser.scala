@@ -263,6 +263,8 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
 
     case FinalAst.Expression.MatchError(tpe, loc) =>
       ErasedAst.Expression.MatchError(visitTpe(tpe), loc)
+
+    case FinalAst.Expression.K(exp, from, to, tpe, loc) => ???
   }
 
   /**

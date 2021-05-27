@@ -229,22 +229,21 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       val arguments = values.toArray
       fromJava(constructor.newInstance(arguments: _*).asInstanceOf[AnyRef])
 
-    case Expression.InvokeMethod(method, exp, args, tpe, loc) => ().asInstanceOf[AnyRef]// TODO
+    case Expression.InvokeMethod(method, exp, args, tpe, loc) => Value.Unit //TODO
 
     case Expression.InvokeStaticMethod(method, args, tpe, loc) =>
       if (method.getName == "toString" && args.length == 1) {
         println(eval(args.head, env0, lenv0, root).asInstanceOf[Value.Int32].lit)
       }
-      ().asInstanceOf[AnyRef]// TODO
+      Value.Unit //TODO
 
-    case Expression.GetField(field, exp, tpe, loc) =>
-      ().asInstanceOf[AnyRef]// TODO
+    case Expression.GetField(field, exp, tpe, loc) => Value.Unit //TODO
 
-    case Expression.PutField(field, exp1, exp2, tpe, loc) => ().asInstanceOf[AnyRef] // TODO
+    case Expression.PutField(field, exp1, exp2, tpe, loc) => Value.Unit //TODO
 
-    case Expression.GetStaticField(field, tpe, loc) => ().asInstanceOf[AnyRef] // TODO
+    case Expression.GetStaticField(field, tpe, loc) => Value.Unit //TODO
 
-    case Expression.PutStaticField(field, exp, tpe, loc) => ().asInstanceOf[AnyRef] // TODO
+    case Expression.PutStaticField(field, exp, tpe, loc) => Value.Unit //TODO
 
     case Expression.NewChannel(exp, tpe, loc) =>
       val size = cast2int32(eval(exp, env0, lenv0, root))
@@ -310,6 +309,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case Expression.Lazy(_, _, _) => ???
 
     case Expression.Null(_, _) => ???
+
+    case Expression.K(exp, from, to, tpe, loc) => ???
   }
 
   /**

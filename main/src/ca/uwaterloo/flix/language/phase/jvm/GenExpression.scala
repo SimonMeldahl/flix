@@ -1170,6 +1170,8 @@ object GenExpression {
     case Expression.MatchError(_, loc) =>
       addSourceLine(visitor, loc)
       AsmOps.compileThrowFlixError(visitor, JvmName.Runtime.MatchError, loc)
+
+    case Expression.K(exp, from, to, tpe, loc) => ???
   }
 
   /*

@@ -699,6 +699,8 @@ object JvmOps {
       case Expression.HoleError(sym, tpe, loc) => Set.empty
 
       case Expression.MatchError(tpe, loc) => Set.empty
+
+      case Expression.K(exp, from, to, tpe, loc) => ???
     }
 
     // TODO: Look for closures in other places.
@@ -1000,6 +1002,8 @@ object JvmOps {
       case Expression.HoleError(sym, tpe, loc) => Set(tpe)
 
       case Expression.MatchError(tpe, loc) => Set(tpe)
+
+      case Expression.K(exp, from, to, tpe, loc) => ???
     }
 
     // TODO: Magnus: Look for types in other places.
