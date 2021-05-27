@@ -256,22 +256,29 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     case Expression.GetChannel(exp, tpe, loc) =>
       val c: Channel = eval(exp, env0, lenv0, root, currentLabel) match {
-        case c: Channel => c
-        case g: Guard => g.getChannel
+        case c: Channel =>
+          println(s"get channel with no guard @$loc")
+          c
+        case g: Guard =>
+          println(s"get channel with guard ${g.toString} @$loc")
+          g.getChannel
       }
       c.get()
 
     case Expression.PutChannel(exp1, exp2, tpe, loc) =>
       val e1 = eval(exp1, env0, lenv0, root, currentLabel)
       val c: Channel = e1 match {
-        case c: Channel => c
-        case g: Guard => g.getChannel
+        case c: Channel =>
+          println(s"put channel with no guard @$loc")
+          c
+        case g: Guard =>
+          println(s"put channel with guard ${g.toString} @$loc")
+          g.getChannel
       }
       val e2 = eval(exp2, env0, lenv0, root, currentLabel)
       c.put(e2)
       e1
 
-    //TODO(LBS) husk
     case Expression.SelectChannel(rules, default, tpe, loc) =>
       // Evaluate all Channel expressions
       val rs = rules.map {r =>
@@ -282,7 +289,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       // Check if there is a default case
       val hasDefault = default.isDefined
       // Call select which returns a selectChoice with the given branchNumber
-      val selectChoice = select(channelsArray, hasDefault)
+      val selectChoice = select(channelsArray, hasDefault, loc)
 
       // Check if the default case was selected
       if (selectChoice.defaultChoice) {
@@ -1032,7 +1039,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     override def loc: SourceLocation = locc
   }
 
-  def select(channels: List[AnyRef], hasDefault: Boolean): SelectChoice = {
+  def select(channels: List[AnyRef], hasDefault: Boolean, loc: SourceLocation): SelectChoice = {
     // Create new Condition and channelLock the current thread
     val selectLock: Lock = new ReentrantLock()
     val condition: Condition = selectLock.newCondition()
@@ -1059,9 +1066,13 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
             // Find channels with waiting elements
             for (channelIndexPair <- channelIndexPairs) {
               val element = channelIndexPair match {
-                case (c: Channel, _) => c.tryGet()
+                case (c: Channel, _) =>
+                  println(s"tryGet channel with no guard @$loc")
+                  c.tryGet()
                 //TODO(LBS) check if we are allowed to try and get from the channel if there is a guard
-                case (g: Guard, _) => g.getChannel.tryGet()
+                case (g: Guard, _) =>
+                  println(s"tryGet channel with guard ${g.toString} @$loc")
+                  g.getChannel.tryGet()
               }
 
               if (element != null) {
