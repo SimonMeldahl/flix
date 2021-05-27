@@ -274,12 +274,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     //TODO(LBS) husk
     case Expression.SelectChannel(rules, default, tpe, loc) =>
       // Evaluate all Channel expressions
-      val rs = rules.map { r =>
-        val c = eval(r.chan, env0, lenv0, root, currentLabel) match {
-          case c: Channel => c
-          case g: Value.Guard => g.getChannel
-        }
-        (r.sym, c, r.exp)
+      val rs = rules.map {r =>
+        (r.sym, eval(r.chan, env0, lenv0, root, currentLabel), r.exp)
       }
       // Create an array of Channels used to call select in Channel.java
       val channelsArray = rs.map { r => r._2 }
@@ -924,6 +920,12 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case _ => throw InternalRuntimeException(s"Unexpected non-array value: ${ref.getClass.getName}.")
   }
 
+  private def cast2channel(ref: AnyRef): Channel = ref match {
+    case c: Channel => c
+    case g: Guard => g.getChannel
+    case _ => throw InternalRuntimeException(s"Unexpected non-channel or non-guard value: ${ref.getClass.getName}.")
+  }
+
   /**
     * Constructs a bool from the given boolean `b`.
     */
@@ -1030,14 +1032,13 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     override def loc: SourceLocation = locc
   }
 
-  def select(channels: List[Channel], hasDefault: Boolean): SelectChoice = {
+  def select(channels: List[AnyRef], hasDefault: Boolean): SelectChoice = {
     // Create new Condition and channelLock the current thread
     val selectLock: Lock = new ReentrantLock()
     val condition: Condition = selectLock.newCondition()
 
     // Sort channels to avoid deadlock when locking
-    val sortedChannels: List[Channel] = Channel.sortChannels(channels.toArray).toList
-
+    val sortedChannels: List[Channel] = Channel.sortChannels(channels.map(cast2channel).toArray).toList
     while (!Thread.interrupted()) {
       // Lock all channels in sorted order
       Channel.lockAllChannels(sortedChannels.toArray)
@@ -1049,10 +1050,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
           // Find channels with waiting elements in a random order to prevent backpressure.
           {
             // Build list mapping a channel to it's branchNumber (the index of the 'channels' array)
-            var channelIndexPairs: List[ChannelIndexPair] = List()
-            for (index <- channels.indices) {
-              channelIndexPairs = channelIndexPairs :+ new ChannelIndexPair(channels(index), index)
-            }
+            var channelIndexPairs = channels.zip(channels.indices)
 
             // Randomize the order channels are looked at.
             // This prevents backpressure from building up on one channel.
@@ -1060,11 +1058,16 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
             // Find channels with waiting elements
             for (channelIndexPair <- channelIndexPairs) {
-              val element = channelIndexPair.getChannel.tryGet()
+              val element = channelIndexPair match {
+                case (c: Channel, _) => c.tryGet()
+                //TODO(LBS) check if we are allowed to try and get from the channel if there is a guard
+                case (g: Guard, _) => g.getChannel.tryGet()
+              }
+
               if (element != null) {
                 // There is a waiting element in this channel.
                 // Return the element and the branchNumber of this channel
-                return new SelectChoice(channelIndexPair.getIndex, element)
+                return new SelectChoice(channelIndexPair._2, element)
               }
             }
           }
@@ -1078,7 +1081,11 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
           // Add our condition to all channels to get notified when a new element is added
           for (channel <- channels) {
-            channel.addGetter(selectLock, condition)
+            channel match {
+              case (c: Channel, _) => c.addGetter(selectLock, condition)
+              //TODO(LBS) check if we are allowed to add getter notification to the channel if there is a guard
+              case (g: Guard, _) => g.getChannel.addGetter(selectLock, condition)
+            }
           }
         } finally {
           // Unlock all channels in sorted order, so other threads may input elements
