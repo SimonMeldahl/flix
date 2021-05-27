@@ -200,6 +200,10 @@ object FinalAst {
 
     case class MatchError(tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
+    type KLabel = List[String]
+
+    case class K(exp: FinalAst.Expression, fromLabel: KLabel, toLabel: KLabel, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: FinalAst.Expression, exp: FinalAst.Expression)

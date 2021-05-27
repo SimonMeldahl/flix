@@ -50,6 +50,34 @@ object Value {
 
   case class Str(lit: java.lang.String) extends Value
 
+  // lit is a channel or Guard
+  case class Guard(lit: AnyRef, from: List[String], to: List[String]) extends Value {
+    def getChannel: Channel = lit match {
+      case c: Channel => c
+      case g: Guard => g.getChannel
+    }
+
+    def getAllLabels: List[(KLabel, KLabel)] = lit match {
+      case _: Channel => List((to, from))
+      case g: Guard => (to, from) :: g.getAllLabels
+    }
+
+    override def toString: String = {
+      getAllLabels.map(l => s"${l._1} <- ${l._2}").mkString("[", ", ", "]")
+    }
+  }
+
+  case class Lambda(closure: AnyRef, fromLabel: KLabel, toLabel: KLabel) extends Value {
+    def call(args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
+      val kargs = args.map(e => Expression.K(e, fromLabel = toLabel, toLabel = fromLabel, e.tpe, e.loc))
+      closure match {
+        case c: Closure =>
+          Interpreter.reduceK(fromLabel, toLabel, Interpreter.invokeClo(c, kargs, env0, lenv0, root, fromLabel))
+        case l: Lambda => Interpreter.reduceK(fromLabel, toLabel, l.call(kargs, env0, lenv0, root))
+      }
+    }
+  }
+
   class Box extends Value {
     /**
       * The internal value of the box.

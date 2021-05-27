@@ -24,6 +24,8 @@ import ca.uwaterloo.flix.language.phase.Phase
 import ca.uwaterloo.flix.util.{InternalRuntimeException, Validation}
 import ca.uwaterloo.flix.util.Validation._
 import ca.uwaterloo.flix.util.vt.VirtualTerminal
+import ca.uwaterloo.flix.language.ast.FinalAst.Expression.KLabel
+import ca.uwaterloo.flix.runtime.interpreter.Value.Guard
 import flix.runtime.{HoleError, ProxyObject}
 
 import java.math.BigInteger
@@ -35,13 +37,12 @@ import scala.util.Random
 object Interpreter extends Phase[Root, Array[String] => Int] {
 
   def run(root: Root)(implicit flix: Flix): Validation[(Array[String]) => Int, CompilationError] = flix.phase("Interpreter") {
-
     val r = root.defs.get(Symbol.Main) map {
       case defn =>
         if (defn.formals.length != 1) {
           return Validation.Failure(LazyList(new InterpreterError("main wrong args", defn.loc)))
         }
-        (args: Array[String]) => eval(defn.exp, Map() + (defn.formals.head.sym.toString -> Value.Arr(args.map(a => Value.Str(a)), MonoType.Array(MonoType.Str))), Map(), root).asInstanceOf[Value.Int32].lit
+        (args: Array[String]) => eval(defn.exp, Map() + (defn.formals.head.sym.toString -> Value.Arr(args.map(a => Value.Str(a)), MonoType.Array(MonoType.Str))), Map(), root, defn.sym.namespace).asInstanceOf[Value.Int32].lit
     }
 
     r match {
@@ -53,7 +54,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Evaluates the given expression `exp0` under the given environment `env0`.
     */
-  def eval(exp0: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = exp0 match {
+  def eval(exp0: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = exp0 match {
     case Expression.Unit(_) => Value.Unit
     case Expression.True(_) => Value.True
     case Expression.False(_) => Value.False
@@ -76,77 +77,77 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       allocateClosure(sym, freeVars.toArray, env0)
 
     case Expression.ApplyClo(exp, args, _, _) =>
-      val clo = eval(exp, env0, lenv0, root)
-      invokeClo(clo, args, env0, lenv0, root)
+      val clo = eval(exp, env0, lenv0, root, currentLabel)
+      invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-    case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root)
+    case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
     case Expression.ApplyCloTail(exp, args, _, _) =>
-      val clo = eval(exp, env0, lenv0, root)
-      invokeClo(clo, args, env0, lenv0, root)
+      val clo = eval(exp, env0, lenv0, root, currentLabel)
+      invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-    case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root)
+    case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
-    case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root)
+    case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
     case Expression.Unary(sop, op, exp, _, _) =>
-      evalUnary(sop, exp, env0, lenv0, root)
+      evalUnary(sop, exp, env0, lenv0, root, currentLabel)
 
-    case Expression.Binary(sop, op, exp1, exp2, _, _) => evalBinary(sop, exp1, exp2, env0, lenv0, root)
+    case Expression.Binary(sop, op, exp1, exp2, _, _) => evalBinary(sop, exp1, exp2, env0, lenv0, root, currentLabel)
 
     case Expression.IfThenElse(exp1, exp2, exp3, tpe, _) =>
-      val cond = cast2bool(eval(exp1, env0, lenv0, root))
-      if (cond) eval(exp2, env0, lenv0, root) else eval(exp3, env0, lenv0, root)
+      val cond = cast2bool(eval(exp1, env0, lenv0, root, currentLabel))
+      if (cond) eval(exp2, env0, lenv0, root, currentLabel) else eval(exp3, env0, lenv0, root, currentLabel)
 
-    case Expression.Branch(exp, branches, tpe, loc) => eval(exp, env0, branches, root)
+    case Expression.Branch(exp, branches, tpe, loc) => eval(exp, env0, branches, root, currentLabel)
 
     case Expression.JumpTo(sym, tpe, loc) =>
       lenv0.get(sym) match {
         case None => throw InternalRuntimeException(s"Unknown label: '$sym' in label environment ${lenv0.mkString(" ,")}.")
-        case Some(e) => eval(e, env0, lenv0, root)
+        case Some(e) => eval(e, env0, lenv0, root, currentLabel)
       }
 
     case Expression.Let(sym, exp1, exp2, _, _) =>
-      val newEnv = env0 + (sym.toString -> eval(exp1, env0, lenv0, root))
-      eval(exp2, newEnv, lenv0, root)
+      val newEnv = env0 + (sym.toString -> eval(exp1, env0, lenv0, root, currentLabel))
+      eval(exp2, newEnv, lenv0, root, currentLabel)
 
-    case Expression.Is(sym, tag, exp, _) => mkBool(cast2tag(eval(exp, env0, lenv0, root)).tag == tag.name)
+    case Expression.Is(sym, tag, exp, _) => mkBool(cast2tag(eval(exp, env0, lenv0, root, currentLabel)).tag == tag.name)
 
-    case Expression.Tag(sym, tag, exp, _, _) => Value.Tag(sym, tag.name, eval(exp, env0, lenv0, root))
+    case Expression.Tag(sym, tag, exp, _, _) => Value.Tag(sym, tag.name, eval(exp, env0, lenv0, root, currentLabel))
 
-    case Expression.Untag(sym, tag, exp, _, _) => cast2tag(eval(exp, env0, lenv0, root)).value
+    case Expression.Untag(sym, tag, exp, _, _) => cast2tag(eval(exp, env0, lenv0, root, currentLabel)).value
 
     case Expression.Index(base, offset, _, _) =>
-      val tuple = cast2tuple(eval(base, env0, lenv0, root))
+      val tuple = cast2tuple(eval(base, env0, lenv0, root, currentLabel))
       tuple.elms(offset)
 
     case Expression.Tuple(elms, _, _) =>
-      val es = elms.map(e => eval(e, env0, lenv0, root))
+      val es = elms.map(e => eval(e, env0, lenv0, root, currentLabel))
       Value.Tuple(es)
 
     case Expression.RecordEmpty(tpe, loc) =>
       Value.RecordEmpty
 
     case Expression.RecordSelect(exp, label, tpe, loc) =>
-      val e = eval(exp, env0, lenv0, root)
+      val e = eval(exp, env0, lenv0, root, currentLabel)
       lookupRecordLabel(e, label.name)
 
     case Expression.RecordExtend(label, value, rest, tpe, loc) =>
-      val v = eval(value, env0, lenv0, root)
-      val r = eval(rest, env0, lenv0, root)
+      val v = eval(value, env0, lenv0, root, currentLabel)
+      val r = eval(rest, env0, lenv0, root, currentLabel)
       Value.RecordExtension(r, label.name, v)
 
     case Expression.RecordRestrict(label, rest, tpe, loc) =>
-      val r = eval(rest, env0, lenv0, root)
+      val r = eval(rest, env0, lenv0, root, currentLabel)
       removeRecordLabel(r, label.name)
 
     case Expression.ArrayLit(elms, tpe, _) =>
-      val es = elms.map(e => eval(e, env0, lenv0, root))
+      val es = elms.map(e => eval(e, env0, lenv0, root, currentLabel))
       Value.Arr(es.toArray, tpe.asInstanceOf[MonoType.Array].tpe)
 
     case Expression.ArrayNew(elm, len, tpe, _) =>
-      val e = eval(elm, env0, lenv0, root)
-      val ln = cast2int32(eval(len, env0, lenv0, root))
+      val e = eval(elm, env0, lenv0, root, currentLabel)
+      val ln = cast2int32(eval(len, env0, lenv0, root, currentLabel))
       val array = new Array[AnyRef](ln)
       for (i <- 0 until ln) {
         array(i) = e
@@ -154,17 +155,17 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       Value.Arr(array, tpe.asInstanceOf[MonoType.Array].tpe)
 
     case Expression.ArrayLoad(base, index, _, _) =>
-      val array = cast2array(eval(base, env0, lenv0, root))
-      val indexCasted = cast2int32(eval(index, env0, lenv0, root))
+      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+      val indexCasted = cast2int32(eval(index, env0, lenv0, root, currentLabel))
       if (0 <= indexCasted && indexCasted < array.elms.length)
         array.elms(indexCasted)
       else
         throw InternalRuntimeException(s"Array index out of bounds: $index  Array length: ${array.elms.length}.")
 
     case Expression.ArrayStore(base, index, elm, _, _) =>
-      val array = cast2array(eval(base, env0, lenv0, root))
-      val indexCasted = cast2int32(eval(index, env0, lenv0, root))
-      val obj = eval(elm, env0, lenv0, root)
+      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+      val indexCasted = cast2int32(eval(index, env0, lenv0, root, currentLabel))
+      val obj = eval(elm, env0, lenv0, root, currentLabel)
       if (0 <= indexCasted && indexCasted < array.elms.length) {
         array.elms(indexCasted) = obj
         Value.Unit
@@ -173,13 +174,13 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         throw InternalRuntimeException(s"Array index out of bounds: $index  Array length: ${array.elms.length}.")
 
     case Expression.ArrayLength(base, _, _) =>
-      val array = cast2array(eval(base, env0, lenv0, root))
+      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
       Value.Int32(array.elms.length)
 
     case Expression.ArraySlice(base, startIndex, endIndex, tpe, loc) =>
-      val array = cast2array(eval(base, env0, lenv0, root))
-      val i1Casted = cast2int32(eval(startIndex, env0, lenv0, root))
-      val i2Casted = cast2int32(eval(endIndex, env0, lenv0, root))
+      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+      val i1Casted = cast2int32(eval(startIndex, env0, lenv0, root, currentLabel))
+      val i2Casted = cast2int32(eval(endIndex, env0, lenv0, root, currentLabel))
 
       if (i1Casted >= i2Casted)
         throw InternalRuntimeException(s"startIndex >= endIndex, startIndex: ${i1Casted}  endIndex: ${i2Casted}.")
@@ -198,30 +199,30 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     case Expression.Ref(exp, tpe, loc) =>
       val box = new Value.Box()
-      val value = eval(exp, env0, lenv0, root)
+      val value = eval(exp, env0, lenv0, root, currentLabel)
       box.setValue(value)
       box
 
     case Expression.Deref(exp, tpe, loc) =>
-      val box = cast2box(eval(exp, env0, lenv0, root))
+      val box = cast2box(eval(exp, env0, lenv0, root, currentLabel))
       box.getValue
 
     case Expression.Assign(exp1, exp2, tpe, loc) =>
-      val box = cast2box(eval(exp1, env0, lenv0, root))
-      val value = eval(exp2, env0, lenv0, root)
+      val box = cast2box(eval(exp1, env0, lenv0, root, currentLabel))
+      val value = eval(exp2, env0, lenv0, root, currentLabel)
       box.setValue(value)
       Value.Unit
 
     case Expression.TryCatch(exp, rules, tpe, loc) =>
       try {
-        eval(exp, env0, lenv0, root)
+        eval(exp, env0, lenv0, root, currentLabel)
       } catch {
         case ex: Throwable =>
           val exceptionClass = ex.getClass
           for (CatchRule(sym, clazz, body) <- rules) {
             if (clazz.isAssignableFrom(exceptionClass)) {
               val env1 = env0 + (sym.toString -> ex)
-              return eval(body, env1, lenv0, root)
+              return eval(body, env1, lenv0, root, currentLabel)
             }
           }
           // Fallthrough, rethrow the exception.
@@ -229,7 +230,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       }
 
     case Expression.InvokeConstructor(constructor, args, tpe, loc) =>
-      val values = evalArgs(args, env0, lenv0, root).map(toJava)
+      val values = evalArgs(args, env0, lenv0, root, currentLabel).map(toJava)
       val arguments = values.toArray
       fromJava(constructor.newInstance(arguments: _*).asInstanceOf[AnyRef])
 
@@ -237,7 +238,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     case Expression.InvokeStaticMethod(method, args, tpe, loc) =>
       if (method.getName == "toString" && args.length == 1) {
-        println(eval(args.head, env0, lenv0, root).asInstanceOf[Value.Int32].lit)
+        println(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int32].lit)
       }
       Value.Unit //TODO
 
@@ -250,11 +251,14 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case Expression.PutStaticField(field, exp, tpe, loc) => Value.Unit //TODO
 
     case Expression.NewChannel(exp, tpe, loc) =>
-      val size = cast2int32(eval(exp, env0, lenv0, root))
+      val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
       new Channel(size)
 
     case Expression.GetChannel(exp, tpe, loc) =>
-      val c = eval(exp, env0, lenv0, root).asInstanceOf[Channel]
+      val c: Channel = eval(exp, env0, lenv0, root, currentLabel) match {
+        case c: Channel => c
+        case g: Guard => g.getChannel
+      }
       c.get()
 
     case Expression.PutChannel(exp1, exp2, tpe, loc) =>
@@ -270,8 +274,12 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     //TODO(LBS) husk
     case Expression.SelectChannel(rules, default, tpe, loc) =>
       // Evaluate all Channel expressions
-      val rs = rules.map {
-        r => (r.sym, eval(r.chan, env0, lenv0, root).asInstanceOf[Channel], r.exp)
+      val rs = rules.map { r =>
+        val c = eval(r.chan, env0, lenv0, root, currentLabel) match {
+          case c: Channel => c
+          case g: Value.Guard => g.getChannel
+        }
+        (r.sym, c, r.exp)
       }
       // Create an array of Channels used to call select in Channel.java
       val channelsArray = rs.map { r => r._2 }
@@ -283,7 +291,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       // Check if the default case was selected
       if (selectChoice.defaultChoice) {
         // Evaluate the default case
-        return eval(default.get, env0, lenv0, root)
+        return eval(default.get, env0, lenv0, root, currentLabel)
       }
 
       // The default was not chosen. Find the matching rule
@@ -291,12 +299,12 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       // Bind the sym of the rule to the element from the selected channel
       val newEnv = env0 + (selectedRule._1.toString -> selectChoice.element)
       // Evaluate the expression of the selected rule
-      eval(selectedRule._3, newEnv, lenv0, root)
+      eval(selectedRule._3, newEnv, lenv0, root, currentLabel)
 
     case Expression.Spawn(exp, tpe, loc) =>
       Channel.spawn(() => {
-        val e = eval(exp, env0, lenv0, root)
-        invokeClo(e, List(), env0, lenv0, root)
+        val e = eval(exp, env0, lenv0, root, currentLabel)
+        invokeClo(e, List(), env0, lenv0, root, currentLabel)
       })
       Value.Unit
 
@@ -311,7 +319,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case Expression.Cast(exp, tpe, loc) =>
       if (exp.tpe != tpe)
         throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format} cast ${exp.tpe} to $tpe.")
-      eval(exp, env0, lenv0, root)
+      eval(exp, env0, lenv0, root, currentLabel)
 
     case Expression.Force(_, _, _) => ???
 
@@ -325,9 +333,9 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Applies the given unary semantic operator `sop` to the value of the expression `exp0` under the environment `env0`
     */
-  private def evalUnary(sop: SemanticOperator, exp0: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
+  private def evalUnary(sop: SemanticOperator, exp0: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = {
     // Evaluate the operand.
-    val v = eval(exp0, env0, lenv0, root)
+    val v = eval(exp0, env0, lenv0, root, currentLabel)
 
     // Apply the operator.
     sop match {
@@ -359,7 +367,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Applies the given binary semantic operator `sop`  to the values of the two expressions `exp1` and `exp2` under the environment `env0`
     */
-  private def evalBinary(sop: SemanticOperator, exp1: Expression, exp2: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
+  private def evalBinary(sop: SemanticOperator, exp1: Expression, exp2: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = {
 
     implicit class TotallyDivisibleInt(dividend: Int) {
       def div0(divisor: Int): Int = divisor match {
@@ -382,29 +390,29 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       }
     }
 
-    def evalBoolOp(sop: SemanticOperator.BoolOp): AnyRef = {
+    def evalBoolOp(sop: SemanticOperator.BoolOp, currentLabel: KLabel): AnyRef = {
       // Evaluate the left operand.
-      val v1 = cast2bool(eval(exp1, env0, lenv0, root))
+      val v1 = cast2bool(eval(exp1, env0, lenv0, root, currentLabel))
 
       sop match {
         // Lazy operators.
-        case SemanticOperator.BoolOp.And if v1 => mkBool(cast2bool(eval(exp2, env0, lenv0, root)))
+        case SemanticOperator.BoolOp.And if v1 => mkBool(cast2bool(eval(exp2, env0, lenv0, root, currentLabel)))
         case SemanticOperator.BoolOp.And => mkBool(false)
 
         // Lazy operators.
         case SemanticOperator.BoolOp.Or if v1 => mkBool(true)
-        case SemanticOperator.BoolOp.Or => mkBool(cast2bool(eval(exp2, env0, lenv0, root)))
+        case SemanticOperator.BoolOp.Or => mkBool(cast2bool(eval(exp2, env0, lenv0, root, currentLabel)))
 
-        case SemanticOperator.BoolOp.Eq => mkBool(v1 == cast2bool(eval(exp2, env0, lenv0, root)))
-        case SemanticOperator.BoolOp.Neq => mkBool(v1 != cast2bool(eval(exp2, env0, lenv0, root)))
+        case SemanticOperator.BoolOp.Eq => mkBool(v1 == cast2bool(eval(exp2, env0, lenv0, root, currentLabel)))
+        case SemanticOperator.BoolOp.Neq => mkBool(v1 != cast2bool(eval(exp2, env0, lenv0, root, currentLabel)))
         case _ => throw InternalRuntimeException(s"Unexpected Semantic Operator: '$sop'.")
       }
     }
 
-    def evalCharOp(sop: SemanticOperator.CharOp): AnyRef = {
+    def evalCharOp(sop: SemanticOperator.CharOp, currentLabel: KLabel): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.CharOp.Eq => mkBool(cast2char(v1) == cast2char(v2))
@@ -417,10 +425,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       }
     }
 
-    def evalFloat32Op(sop: SemanticOperator.Float32Op): AnyRef = {
+    def evalFloat32Op(sop: SemanticOperator.Float32Op, currentLabel: KLabel): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.Float32Op.Add => Value.Float32(cast2float32(v1) + cast2float32(v2))
@@ -439,10 +447,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       }
     }
 
-    def evalFloat64Op(sop: SemanticOperator.Float64Op): AnyRef = {
+    def evalFloat64Op(sop: SemanticOperator.Float64Op, current: KLabel): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.Float64Op.Add => Value.Float64(cast2float64(v1) + cast2float64(v2))
@@ -463,8 +471,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     def evalInt8Op(sop: SemanticOperator.Int8Op): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.Int8Op.Add => Value.Int8((cast2int8(v1) + cast2int8(v2)).toByte)
@@ -490,8 +498,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     def evalInt16Op(sop: SemanticOperator.Int16Op): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.Int16Op.Add => Value.Int16((cast2int16(v1) + cast2int16(v2)).toShort)
@@ -517,8 +525,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     def evalInt32Op(sop: SemanticOperator.Int32Op): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.Int32Op.Add => Value.Int32(cast2int32(v1) + cast2int32(v2))
@@ -544,8 +552,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     def evalInt64Op(sop: SemanticOperator.Int64Op): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.Int64Op.Add => Value.Int64(cast2int64(v1) + cast2int64(v2))
@@ -571,8 +579,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     def evalBigIntOp(sop: SemanticOperator.BigIntOp): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.BigIntOp.Add => Value.BigInt(cast2bigInt(v1) add cast2bigInt(v2))
@@ -598,8 +606,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     def evalOtherOp(sop: SemanticOperator): AnyRef = {
       // Evaluate the operands.
-      val v1 = eval(exp1, env0, lenv0, root)
-      val v2 = eval(exp2, env0, lenv0, root)
+      val v1 = eval(exp1, env0, lenv0, root, currentLabel)
+      val v2 = eval(exp2, env0, lenv0, root, currentLabel)
 
       sop match {
         case SemanticOperator.StringOp.Concat => Value.Str(cast2str(v1) + cast2str(v2))
@@ -611,10 +619,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     // Apply the operator.
     sop match {
-      case op: SemanticOperator.BoolOp => evalBoolOp(op)
-      case op: SemanticOperator.CharOp => evalCharOp(op)
-      case op: SemanticOperator.Float32Op => evalFloat32Op(op)
-      case op: SemanticOperator.Float64Op => evalFloat64Op(op)
+      case op: SemanticOperator.BoolOp => evalBoolOp(op, currentLabel)
+      case op: SemanticOperator.CharOp => evalCharOp(op, currentLabel)
+      case op: SemanticOperator.Float32Op => evalFloat32Op(op, currentLabel)
+      case op: SemanticOperator.Float64Op => evalFloat64Op(op, currentLabel)
       case op: SemanticOperator.Int8Op => evalInt8Op(op)
       case op: SemanticOperator.Int16Op => evalInt16Op(op)
       case op: SemanticOperator.Int32Op => evalInt32Op(op)
@@ -627,25 +635,29 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Invokes the given closure value `clo` with the given arguments `args` under the given environment `env0`.
     */
-  private def invokeClo(clo: AnyRef, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
-    val Value.Closure(name, bindings) = cast2closure(clo)
-    val as = evalArgs(args, env0, lenv0, root)
-    val constant = root.defs(name)
-    // Bindings for the capture variables are passed as arguments.
-    val env1 = constant.formals.take(bindings.length).zip(bindings).foldLeft(env0) {
-      case (macc, (formal, actual)) => macc + (formal.sym.toString -> actual)
+  def invokeClo(clo: AnyRef, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = {
+    clo match {
+      case clo: Value.Closure =>
+        val Value.Closure(name, bindings) = cast2closure(clo)
+        val as = evalArgs(args, env0, lenv0, root, currentLabel)
+        val constant = root.defs(name)
+        // Bindings for the capture variables are passed as arguments.
+        val env1 = constant.formals.take(bindings.length).zip(bindings).foldLeft(env0) {
+          case (macc, (formal, actual)) => macc + (formal.sym.toString -> actual)
+        }
+        // Now pass the actual arguments supplied by the caller.
+        val env2 = constant.formals.drop(bindings.length).zip(as).foldLeft(env1) {
+          case (macc, (formal, actual)) => macc + (formal.sym.toString -> actual)
+        }
+        eval(constant.exp, env2, Map.empty, root, currentLabel)
+      case l: Value. Lambda => l.call(args, env0, lenv0, root)
     }
-    // Now pass the actual arguments supplied by the caller.
-    val env2 = constant.formals.drop(bindings.length).zip(as).foldLeft(env1) {
-      case (macc, (formal, actual)) => macc + (formal.sym.toString -> actual)
-    }
-    eval(constant.exp, env2, Map.empty, root)
   }
 
   /**
     * Invokes the given definition `sym` with the given arguments `args` under the given environment `env0`.
     */
-  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
+  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = {
     // Lookup the definition.
     val defn = root.defs(sym)
 
@@ -654,7 +666,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     val hasLabelChanged = fromLabel != toLabel
 
     // Evaluate the arguments.
-    val as = evalArgs(args, env0, lenv0, root)
+    val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a => if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a) else a)
 
     // Construct the new environment by pairing the formal parameters with the actual arguments.
     val env = defn.formals.zip(as).foldLeft(Map.empty[String, AnyRef]) {
@@ -662,7 +674,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     }
 
     // Evaluate the body expression under the new local variable environment and an empty label environment.
-    eval(defn.exp, env, Map.empty, root)
+    reduceK(fromLabel = fromLabel, toLabel = toLabel, eval(defn.exp, env, Map.empty, root, fromLabel))
   }
 
   def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = value match {
@@ -674,8 +686,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Evaluates the given list of expressions `exps` under the given environment `env0` to a list of values.
     */
-  private def evalArgs(exps: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): List[AnyRef] = {
-    exps.map(a => eval(a, env0, lenv0, root))
+  private def evalArgs(exps: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): List[AnyRef] = {
+    exps.map(a => eval(a, env0, lenv0, root, currentLabel))
   }
 
   /**
@@ -705,7 +717,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Returns an invocation target for the Flix function corresponding to the given symbol `sym`.
     */
-  def link(sym: Symbol.DefnSym, root: Root)(implicit flix: Flix): java.util.function.Function[Array[AnyRef], ProxyObject] = (args: Array[AnyRef]) => {
+  def link(sym: Symbol.DefnSym, root: Root, currentLabel: KLabel)(implicit flix: Flix): java.util.function.Function[Array[AnyRef], ProxyObject] = (args: Array[AnyRef]) => {
     // Lookup the definition symbol in the program.
     val defn = root.defs(sym)
 
@@ -717,7 +729,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     val lenv0 = Map.empty[Symbol.LabelSym, Expression]
 
     // Evaluate the function body.
-    val result = Interpreter.toJava(Interpreter.eval(defn.exp, env0, Map.empty, root))
+    val result = Interpreter.toJava(Interpreter.eval(defn.exp, env0, Map.empty, root, currentLabel))
 
     // Immediately return the result if it is already a proxy object.
     if (result.isInstanceOf[ProxyObject]) {
