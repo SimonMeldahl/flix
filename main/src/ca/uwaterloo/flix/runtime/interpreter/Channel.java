@@ -162,7 +162,7 @@ public final class Channel {
    * @param channels the channels so sort
    * @return a sorted array of the given channels
    */
-  private static Channel[] sortChannels(Channel[] channels) {
+  public static Channel[] sortChannels(Channel[] channels) {
     // Create a new array to sort since the original is still used
     Channel[] channelsCopy = Arrays.copyOf(channels, channels.length);
     Arrays.sort(channelsCopy, Comparator.comparing((Channel c) -> c.id));
@@ -176,7 +176,7 @@ public final class Channel {
    *
    * @param channels the array of channels to unlock
    */
-  private static void lockAllChannels(Channel[] channels) {
+  public static void lockAllChannels(Channel[] channels) {
     for (Channel c : channels) c.channelLock.lock();
   }
 
@@ -185,7 +185,7 @@ public final class Channel {
    *
    * @param channels the channels to unlock
    */
-  private static void unlockAllChannels(Channel[] channels) {
+  public static void unlockAllChannels(Channel[] channels) {
     // Unlock channels in reverse order like Go.
     for (int i = channels.length - 1; i >= 0; i--) {
       channels[i].channelLock.unlock();

@@ -27,6 +27,10 @@ import ca.uwaterloo.flix.util.vt.VirtualTerminal
 import flix.runtime.{HoleError, ProxyObject}
 
 import java.math.BigInteger
+import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.locks.{Condition, Lock, ReentrantLock}
+import scala.reflect.internal.util.Collections
+import scala.util.Random
 
 object Interpreter extends Phase[Root, Array[String] => Int] {
 
@@ -270,11 +274,11 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         r => (r.sym, eval(r.chan, env0, lenv0, root).asInstanceOf[Channel], r.exp)
       }
       // Create an array of Channels used to call select in Channel.java
-      val channelsArray = rs.map { r => r._2 }.toArray[Channel]
+      val channelsArray = rs.map { r => r._2 }
       // Check if there is a default case
       val hasDefault = default.isDefined
       // Call select which returns a selectChoice with the given branchNumber
-      val selectChoice = Channel.select(channelsArray, hasDefault)
+      val selectChoice = select(channelsArray, hasDefault)
 
       // Check if the default case was selected
       if (selectChoice.defaultChoice) {
@@ -1012,5 +1016,76 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       * Returns the primary source location of the error.
       */
     override def loc: SourceLocation = locc
+  }
+
+  def select(channels: List[Channel], hasDefault: Boolean): SelectChoice = {
+    // Create new Condition and channelLock the current thread
+    val selectLock: Lock = new ReentrantLock()
+    val condition: Condition = selectLock.newCondition()
+
+    // Sort channels to avoid deadlock when locking
+    val sortedChannels: List[Channel] = Channel.sortChannels(channels.toArray).toList
+
+    while (!Thread.interrupted()) {
+      // Lock all channels in sorted order
+      Channel.lockAllChannels(sortedChannels.toArray)
+      try {
+        // Lock the select lock after the channels
+        selectLock.lock()
+
+        try {
+          // Find channels with waiting elements in a random order to prevent backpressure.
+          {
+            // Build list mapping a channel to it's branchNumber (the index of the 'channels' array)
+            var channelIndexPairs: List[ChannelIndexPair] = List()
+            for (index <- channels.indices) {
+              channelIndexPairs = channelIndexPairs :+ new ChannelIndexPair(channels(index), index)
+            }
+
+            // Randomize the order channels are looked at.
+            // This prevents backpressure from building up on one channel.
+            channelIndexPairs = Random.shuffle(channelIndexPairs)
+
+            // Find channels with waiting elements
+            for (channelIndexPair <- channelIndexPairs) {
+              val element = channelIndexPair.getChannel.tryGet()
+              if (element != null) {
+                // There is a waiting element in this channel.
+                // Return the element and the branchNumber of this channel
+                return new SelectChoice(channelIndexPair.getIndex, element)
+              }
+            }
+          }
+
+          // No element was found.
+
+          // If there is a default case, choose this
+          if (hasDefault) {
+            return SelectChoice.DEFAULT_CHOICE
+          }
+
+          // Add our condition to all channels to get notified when a new element is added
+          for (channel <- channels) {
+            channel.addGetter(selectLock, condition)
+          }
+        } finally {
+          // Unlock all channels in sorted order, so other threads may input elements
+          Channel.unlockAllChannels(sortedChannels.toArray)
+        }
+
+        // Wait for an element to be added to any of the channels
+        condition.await()
+      } catch {
+        case _: InterruptedException => throw new RuntimeException("Thread interrupted");
+      } finally {
+        // Unlock the selectLock, which is relevant when a different thread wants to put
+        // an element into a channel that was not selected from the select.
+        // This other channel will then signal the condition from selectLock (in the put method),
+        // so it needs the lock.
+        selectLock.unlock()
+      }
+    }
+
+    throw new RuntimeException("Thread interrupted");
   }
 }
