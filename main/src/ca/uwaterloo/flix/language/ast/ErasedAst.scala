@@ -186,7 +186,7 @@ object ErasedAst {
 
     case class PutStaticField(field: Field, exp: ErasedAst.Expression[PType], tpe: EType[PReference[PUnit]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PUnit]]
 
-    case class NewChannel[T <: PType](exp: ErasedAst.Expression[PInt32], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
+    case class NewChannel[T <: PType](exp: ErasedAst.Expression[PInt32], policy: Option[ErasedAst.Expression[PReference[PArray[PReference[PStr]]]]], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
 
     case class GetChannel[T <: PType](exp: ErasedAst.Expression[PReference[PChan[T]]], tpe: EType[T], loc: SourceLocation) extends ErasedAst.Expression[T]
 

@@ -221,8 +221,9 @@ object VarNumbering extends Phase[Root, Root] {
 
       case Expression.PutStaticField(field, exp, tpe, loc) => visitExp(exp, i0)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
-        visitExp(exp, i0)
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
+        val i1 = visitExp(exp, i0)
+        pol.map(visitExp(_, i1)).getOrElse(i1)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         visitExp(exp, i0)

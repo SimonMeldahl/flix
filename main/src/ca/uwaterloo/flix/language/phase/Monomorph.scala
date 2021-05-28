@@ -382,9 +382,10 @@ object Monomorph extends Phase[TypedAst.Root, TypedAst.Root] {
           val e = visitExp(exp, env0)
           Expression.PutStaticField(field, e, tpe, eff, loc)
 
-        case Expression.NewChannel(exp, tpe, eff, loc) =>
+        case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
           val e = visitExp(exp, env0)
-          Expression.NewChannel(e, subst0(tpe), eff, loc)
+          val p = pol.map(visitExp(_, env0))
+          Expression.NewChannel(e, p, subst0(tpe), eff, loc)
 
         case Expression.GetChannel(exp, tpe, eff, loc) =>
           val e = visitExp(exp, env0)

@@ -282,9 +282,10 @@ object ClosureConv extends Phase[Root, Root] {
       val e = visitExp(exp)
       Expression.PutStaticField(field, e, tpe, loc)
 
-    case Expression.NewChannel(exp, tpe, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, loc) =>
       val e = visitExp(exp)
-      Expression.NewChannel(e, tpe, loc)
+      val p = pol.map(visitExp)
+      Expression.NewChannel(e, p, tpe, loc)
 
     case Expression.GetChannel(exp, tpe, loc) =>
       val e = visitExp(exp)
@@ -408,7 +409,7 @@ object ClosureConv extends Phase[Root, Root] {
 
     case Expression.PutStaticField(field, exp, tpe, loc) => freeVars(exp)
 
-    case Expression.NewChannel(exp, tpe, loc) => freeVars(exp)
+    case Expression.NewChannel(exp, pol, tpe, loc) => freeVars(exp) ++ pol.map(freeVars).getOrElse(mutable.LinkedHashSet.empty)
 
     case Expression.GetChannel(exp, tpe, loc) => freeVars(exp)
 
@@ -666,9 +667,10 @@ object ClosureConv extends Phase[Root, Root] {
         val e = visitExp(exp)
         Expression.PutStaticField(field, e, tpe, loc)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        Expression.NewChannel(e, tpe, loc)
+        val p = pol.map(visitExp)
+        Expression.NewChannel(e, p, tpe, loc)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)

@@ -234,8 +234,8 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
     case FinalAst.Expression.PutStaticField(field, exp, tpe, loc) =>
       ErasedAst.Expression.PutStaticField(field, visitExp(exp), visitTpe(tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
-    case FinalAst.Expression.NewChannel(exp, tpe, loc) =>
-      ErasedAst.Expression.NewChannel(visitExp(exp), visitTpe[PReference[PChan[T]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
+    case FinalAst.Expression.NewChannel(exp, pol, tpe, loc) =>
+      ErasedAst.Expression.NewChannel(visitExp(exp), pol.map(visitExp), visitTpe[PReference[PChan[T]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
     case FinalAst.Expression.GetChannel(exp, tpe, loc) =>
       ErasedAst.Expression.GetChannel(visitExp(exp), visitTpe(tpe), loc)

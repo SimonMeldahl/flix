@@ -280,8 +280,9 @@ object SimplifiedAstOps {
         checkExp(exp, env0, ienv0)
         checkType(tpe)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
         checkExp(exp, env0, ienv0)
+        pol.foreach(checkExp(_, env0, ienv0))
         checkType(tpe)
 
       case Expression.GetChannel(exp, tpe, loc) =>

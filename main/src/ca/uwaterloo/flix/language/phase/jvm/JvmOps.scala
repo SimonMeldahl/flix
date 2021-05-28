@@ -678,7 +678,7 @@ object JvmOps {
       case Expression.PutStaticField(field, exp, tpe, loc) =>
         visitExp(exp)
 
-      case Expression.NewChannel(exp, tpe, loc) => visitExp(exp)
+      case Expression.NewChannel(exp, pol, tpe, loc) => visitExp(exp) ++ pol.map(visitExp).getOrElse(Set.empty)
 
       case Expression.GetChannel(exp, tpe, loc) => visitExp(exp)
 
@@ -982,7 +982,7 @@ object JvmOps {
       case Expression.PutStaticField(field, exp, tpe, loc) =>
         visitExp(exp) + tpe
 
-      case Expression.NewChannel(exp, tpe, loc) => visitExp(exp) + tpe
+      case Expression.NewChannel(exp, pol, tpe, loc) => visitExp(exp) ++ pol.map(visitExp).getOrElse(Set.empty) + tpe
 
       case Expression.GetChannel(exp, tpe, loc) => visitExp(exp) + tpe
 

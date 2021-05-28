@@ -279,9 +279,10 @@ object Optimizer extends Phase[Root, Root] {
         val e = visitExp(exp, env0)
         Expression.PutStaticField(field, e, tpe, loc)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp, env0)
-        Expression.NewChannel(e, tpe, loc)
+        val p = pol.map(visitExp(_, env0))
+        Expression.NewChannel(e, p, tpe, loc)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp, env0)

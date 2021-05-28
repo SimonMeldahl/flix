@@ -18,19 +18,17 @@ package ca.uwaterloo.flix.runtime.interpreter
 
 import ca.uwaterloo.flix.api._
 import ca.uwaterloo.flix.language.CompilationError
+import ca.uwaterloo.flix.language.ast.FinalAst.Expression.KLabel
 import ca.uwaterloo.flix.language.ast.FinalAst._
 import ca.uwaterloo.flix.language.ast._
 import ca.uwaterloo.flix.language.phase.Phase
-import ca.uwaterloo.flix.util.{InternalRuntimeException, Validation}
+import ca.uwaterloo.flix.runtime.interpreter.{Channel => JavaChannel}
 import ca.uwaterloo.flix.util.Validation._
 import ca.uwaterloo.flix.util.vt.VirtualTerminal
-import ca.uwaterloo.flix.language.ast.FinalAst.Expression.KLabel
-import ca.uwaterloo.flix.runtime.interpreter.Value.Guard
+import ca.uwaterloo.flix.util.{InternalRuntimeException, Validation}
 import flix.runtime.{HoleError, ProxyObject}
 
 import java.math.BigInteger
-import java.util.concurrent.locks.{Condition, Lock, ReentrantLock}
-import scala.util.Random
 
 object Interpreter extends Phase[Root, Array[String] => Int] {
 
@@ -52,283 +50,275 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Evaluates the given expression `exp0` under the given environment `env0`.
     */
-  def eval(exp0: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = exp0 match {
-    case Expression.Unit(_) => Value.Unit
-    case Expression.True(_) => Value.True
-    case Expression.False(_) => Value.False
-    case Expression.Char(lit, _) => Value.Char(lit)
-    case Expression.Float32(lit, _) => Value.Float32(lit)
-    case Expression.Float64(lit, _) => Value.Float64(lit)
-    case Expression.Int8(lit, _) => Value.Int8(lit)
-    case Expression.Int16(lit, _) => Value.Int16(lit)
-    case Expression.Int32(lit, _) => Value.Int32(lit)
-    case Expression.Int64(lit, _) => Value.Int64(lit)
-    case Expression.BigInt(lit, _) => Value.BigInt(lit)
-    case Expression.Str(lit, _) => Value.Str(lit)
+  def eval(exp0: Expression, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = {
+    implicit val implicitLoc: SourceLocation = exp0.loc
+    exp0 match {
+      case Expression.Unit(_) => Value.Unit
+      case Expression.True(_) => Value.True
+      case Expression.False(_) => Value.False
+      case Expression.Char(lit, _) => Value.Char(lit)
+      case Expression.Float32(lit, _) => Value.Float32(lit)
+      case Expression.Float64(lit, _) => Value.Float64(lit)
+      case Expression.Int8(lit, _) => Value.Int8(lit)
+      case Expression.Int16(lit, _) => Value.Int16(lit)
+      case Expression.Int32(lit, _) => Value.Int32(lit)
+      case Expression.Int64(lit, _) => Value.Int64(lit)
+      case Expression.BigInt(lit, _) => Value.BigInt(lit)
+      case Expression.Str(lit, _) => Value.Str(lit)
 
-    case Expression.Var(sym, _, loc) => env0.get(sym.toString) match {
-      case None => throw InternalRuntimeException(s"Key '${sym.toString}' not found in environment.")
-      case Some(v) => v
-    }
-
-    case Expression.Closure(sym, freeVars, _, _, _) =>
-      allocateClosure(sym, freeVars.toArray, env0)
-
-    case Expression.ApplyClo(exp, args, _, _) =>
-      val clo = eval(exp, env0, lenv0, root, currentLabel)
-      invokeClo(clo, args, env0, lenv0, root, currentLabel)
-
-    case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
-
-    case Expression.ApplyCloTail(exp, args, _, _) =>
-      val clo = eval(exp, env0, lenv0, root, currentLabel)
-      invokeClo(clo, args, env0, lenv0, root, currentLabel)
-
-    case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
-
-    case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
-
-    case Expression.Unary(sop, op, exp, _, _) =>
-      evalUnary(sop, exp, env0, lenv0, root, currentLabel)
-
-    case Expression.Binary(sop, op, exp1, exp2, _, _) => evalBinary(sop, exp1, exp2, env0, lenv0, root, currentLabel)
-
-    case Expression.IfThenElse(exp1, exp2, exp3, tpe, _) =>
-      val cond = cast2bool(eval(exp1, env0, lenv0, root, currentLabel))
-      if (cond) eval(exp2, env0, lenv0, root, currentLabel) else eval(exp3, env0, lenv0, root, currentLabel)
-
-    case Expression.Branch(exp, branches, tpe, loc) => eval(exp, env0, branches, root, currentLabel)
-
-    case Expression.JumpTo(sym, tpe, loc) =>
-      lenv0.get(sym) match {
-        case None => throw InternalRuntimeException(s"Unknown label: '$sym' in label environment ${lenv0.mkString(" ,")}.")
-        case Some(e) => eval(e, env0, lenv0, root, currentLabel)
+      case Expression.Var(sym, _, loc) => env0.get(sym.toString) match {
+        case None => throw InternalRuntimeException(s"Key '${sym.toString}' not found in environment.")
+        case Some(v) => v
       }
 
-    case Expression.Let(sym, exp1, exp2, _, _) =>
-      val newEnv = env0 + (sym.toString -> eval(exp1, env0, lenv0, root, currentLabel))
-      eval(exp2, newEnv, lenv0, root, currentLabel)
+      case Expression.Closure(sym, freeVars, _, _, _) =>
+        allocateClosure(sym, freeVars.toArray, env0)
 
-    case Expression.Is(sym, tag, exp, _) => mkBool(cast2tag(eval(exp, env0, lenv0, root, currentLabel)).tag == tag.name)
+      case Expression.ApplyClo(exp, args, _, _) =>
+        val clo = eval(exp, env0, lenv0, root, currentLabel)
+        invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-    case Expression.Tag(sym, tag, exp, _, _) => Value.Tag(sym, tag.name, eval(exp, env0, lenv0, root, currentLabel))
+      case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
-    case Expression.Untag(sym, tag, exp, _, _) => cast2tag(eval(exp, env0, lenv0, root, currentLabel)).value
+      case Expression.ApplyCloTail(exp, args, _, _) =>
+        val clo = eval(exp, env0, lenv0, root, currentLabel)
+        invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-    case Expression.Index(base, offset, _, _) =>
-      val tuple = cast2tuple(eval(base, env0, lenv0, root, currentLabel))
-      tuple.elms(offset)
+      case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
-    case Expression.Tuple(elms, _, _) =>
-      val es = elms.map(e => eval(e, env0, lenv0, root, currentLabel))
-      Value.Tuple(es)
+      case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
-    case Expression.RecordEmpty(tpe, loc) =>
-      Value.RecordEmpty
+      case Expression.Unary(sop, op, exp, _, _) =>
+        evalUnary(sop, exp, env0, lenv0, root, currentLabel)
 
-    case Expression.RecordSelect(exp, label, tpe, loc) =>
-      val e = eval(exp, env0, lenv0, root, currentLabel)
-      lookupRecordLabel(e, label.name)
+      case Expression.Binary(sop, op, exp1, exp2, _, _) => evalBinary(sop, exp1, exp2, env0, lenv0, root, currentLabel)
 
-    case Expression.RecordExtend(label, value, rest, tpe, loc) =>
-      val v = eval(value, env0, lenv0, root, currentLabel)
-      val r = eval(rest, env0, lenv0, root, currentLabel)
-      Value.RecordExtension(r, label.name, v)
+      case Expression.IfThenElse(exp1, exp2, exp3, tpe, _) =>
+        val cond = cast2bool(eval(exp1, env0, lenv0, root, currentLabel))
+        if (cond) eval(exp2, env0, lenv0, root, currentLabel) else eval(exp3, env0, lenv0, root, currentLabel)
 
-    case Expression.RecordRestrict(label, rest, tpe, loc) =>
-      val r = eval(rest, env0, lenv0, root, currentLabel)
-      removeRecordLabel(r, label.name)
+      case Expression.Branch(exp, branches, tpe, loc) => eval(exp, env0, branches, root, currentLabel)
 
-    case Expression.ArrayLit(elms, tpe, _) =>
-      val es = elms.map(e => eval(e, env0, lenv0, root, currentLabel))
-      Value.Arr(es.toArray, tpe.asInstanceOf[MonoType.Array].tpe)
-
-    case Expression.ArrayNew(elm, len, tpe, _) =>
-      val e = eval(elm, env0, lenv0, root, currentLabel)
-      val ln = cast2int32(eval(len, env0, lenv0, root, currentLabel))
-      val array = new Array[AnyRef](ln)
-      for (i <- 0 until ln) {
-        array(i) = e
-      }
-      Value.Arr(array, tpe.asInstanceOf[MonoType.Array].tpe)
-
-    case Expression.ArrayLoad(base, index, _, _) =>
-      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
-      val indexCasted = cast2int32(eval(index, env0, lenv0, root, currentLabel))
-      if (0 <= indexCasted && indexCasted < array.elms.length)
-        array.elms(indexCasted)
-      else
-        throw InternalRuntimeException(s"Array index out of bounds: $index  Array length: ${array.elms.length}.")
-
-    case Expression.ArrayStore(base, index, elm, _, _) =>
-      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
-      val indexCasted = cast2int32(eval(index, env0, lenv0, root, currentLabel))
-      val obj = eval(elm, env0, lenv0, root, currentLabel)
-      if (0 <= indexCasted && indexCasted < array.elms.length) {
-        array.elms(indexCasted) = obj
-        Value.Unit
-      }
-      else
-        throw InternalRuntimeException(s"Array index out of bounds: $index  Array length: ${array.elms.length}.")
-
-    case Expression.ArrayLength(base, _, _) =>
-      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
-      Value.Int32(array.elms.length)
-
-    case Expression.ArraySlice(base, startIndex, endIndex, tpe, loc) =>
-      val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
-      val i1Casted = cast2int32(eval(startIndex, env0, lenv0, root, currentLabel))
-      val i2Casted = cast2int32(eval(endIndex, env0, lenv0, root, currentLabel))
-
-      if (i1Casted >= i2Casted)
-        throw InternalRuntimeException(s"startIndex >= endIndex, startIndex: ${i1Casted}  endIndex: ${i2Casted}.")
-      else if (i1Casted < 0)
-        throw InternalRuntimeException(s"Invalid startIndex: ${i1Casted}.")
-      else if (i2Casted > array.elms.length)
-        throw InternalRuntimeException(s"endIndex out of bounds: ${i2Casted}    Array length: ${array.elms.length}.")
-      else {
-        val resultArray = new Array[AnyRef](i2Casted - i1Casted)
-
-        for (i <- i1Casted until i2Casted) {
-          resultArray(i - i1Casted) = array.elms(i)
+      case Expression.JumpTo(sym, tpe, loc) =>
+        lenv0.get(sym) match {
+          case None => throw InternalRuntimeException(s"Unknown label: '$sym' in label environment ${lenv0.mkString(" ,")}.")
+          case Some(e) => eval(e, env0, lenv0, root, currentLabel)
         }
-        Value.Arr(resultArray, tpe.asInstanceOf[MonoType.Array].tpe)
-      }
 
-    case Expression.Ref(exp, tpe, loc) =>
-      val box = new Value.Box()
-      val value = eval(exp, env0, lenv0, root, currentLabel)
-      box.setValue(value)
-      box
+      case Expression.Let(sym, exp1, exp2, _, _) =>
+        val newEnv = env0 + (sym.toString -> eval(exp1, env0, lenv0, root, currentLabel))
+        eval(exp2, newEnv, lenv0, root, currentLabel)
 
-    case Expression.Deref(exp, tpe, loc) =>
-      val box = cast2box(eval(exp, env0, lenv0, root, currentLabel))
-      box.getValue
+      case Expression.Is(sym, tag, exp, _) => mkBool(cast2tag(eval(exp, env0, lenv0, root, currentLabel)).tag == tag.name)
 
-    case Expression.Assign(exp1, exp2, tpe, loc) =>
-      val box = cast2box(eval(exp1, env0, lenv0, root, currentLabel))
-      val value = eval(exp2, env0, lenv0, root, currentLabel)
-      box.setValue(value)
-      Value.Unit
+      case Expression.Tag(sym, tag, exp, _, _) => Value.Tag(sym, tag.name, eval(exp, env0, lenv0, root, currentLabel))
 
-    case Expression.TryCatch(exp, rules, tpe, loc) =>
-      try {
-        eval(exp, env0, lenv0, root, currentLabel)
-      } catch {
-        case ex: Throwable =>
-          val exceptionClass = ex.getClass
-          for (CatchRule(sym, clazz, body) <- rules) {
-            if (clazz.isAssignableFrom(exceptionClass)) {
-              val env1 = env0 + (sym.toString -> ex)
-              return eval(body, env1, lenv0, root, currentLabel)
-            }
-          }
-          // Fallthrough, rethrow the exception.
-          throw ex
-      }
+      case Expression.Untag(sym, tag, exp, _, _) => cast2tag(eval(exp, env0, lenv0, root, currentLabel)).value
 
-    case Expression.InvokeConstructor(constructor, args, tpe, loc) =>
-      val values = evalArgs(args, env0, lenv0, root, currentLabel).map(toJava)
-      val arguments = values.toArray
-      fromJava(constructor.newInstance(arguments: _*).asInstanceOf[AnyRef])
+      case Expression.Index(base, offset, _, _) =>
+        val tuple = cast2tuple(eval(base, env0, lenv0, root, currentLabel))
+        tuple.elms(offset)
 
-    case Expression.InvokeMethod(method, exp, args, tpe, loc) => Value.Unit //TODO
+      case Expression.Tuple(elms, _, _) =>
+        val es = elms.map(e => eval(e, env0, lenv0, root, currentLabel))
+        Value.Tuple(es)
 
-    case Expression.InvokeStaticMethod(method, args, tpe, loc) =>
-      if (method.getName == "toString" && args.length == 1) {
-        println(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int32].lit)
-      }
-      Value.Unit //TODO
+      case Expression.RecordEmpty(tpe, loc) =>
+        Value.RecordEmpty
 
-    case Expression.GetField(field, exp, tpe, loc) => Value.Unit //TODO
-
-    case Expression.PutField(field, exp1, exp2, tpe, loc) => Value.Unit //TODO
-
-    case Expression.GetStaticField(field, tpe, loc) => Value.Unit //TODO
-
-    case Expression.PutStaticField(field, exp, tpe, loc) => Value.Unit //TODO
-
-    case Expression.NewChannel(exp, tpe, loc) =>
-      val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
-      new Channel(size)
-
-    case Expression.GetChannel(exp, tpe, loc) =>
-      val c: Channel = eval(exp, env0, lenv0, root, currentLabel) match {
-        case c: Channel =>
-          println(s"get channel with no guard @$loc")
-          c
-        case g: Guard =>
-          println(s"get channel with guard ${g.toString} @$loc")
-          g.getChannel
-      }
-      c.get()
-
-    case Expression.PutChannel(exp1, exp2, tpe, loc) =>
-      val e1 = eval(exp1, env0, lenv0, root, currentLabel)
-      val c: Channel = e1 match {
-        case c: Channel =>
-          println(s"put channel with no guard @$loc")
-          c
-        case g: Guard =>
-          println(s"put channel with guard ${g.toString} @$loc")
-          g.getChannel
-      }
-      val e2 = eval(exp2, env0, lenv0, root, currentLabel)
-      c.put(e2)
-      e1
-
-    case Expression.SelectChannel(rules, default, tpe, loc) =>
-      // Evaluate all Channel expressions
-      val rs = rules.map {r =>
-        (r.sym, eval(r.chan, env0, lenv0, root, currentLabel), r.exp)
-      }
-      // Create an array of Channels used to call select in Channel.java
-      val channelsArray = rs.map { r => r._2 }
-      // Check if there is a default case
-      val hasDefault = default.isDefined
-      // Call select which returns a selectChoice with the given branchNumber
-      val selectChoice = select(channelsArray, hasDefault, loc)
-
-      // Check if the default case was selected
-      if (selectChoice.defaultChoice) {
-        // Evaluate the default case
-        return eval(default.get, env0, lenv0, root, currentLabel)
-      }
-
-      // The default was not chosen. Find the matching rule
-      val selectedRule = rs.apply(selectChoice.branchNumber)
-      // Bind the sym of the rule to the element from the selected channel
-      val newEnv = env0 + (selectedRule._1.toString -> selectChoice.element)
-      // Evaluate the expression of the selected rule
-      eval(selectedRule._3, newEnv, lenv0, root, currentLabel)
-
-    case Expression.Spawn(exp, tpe, loc) =>
-      Channel.spawn(() => {
+      case Expression.RecordSelect(exp, label, tpe, loc) =>
         val e = eval(exp, env0, lenv0, root, currentLabel)
-        invokeClo(e, List(), env0, lenv0, root, currentLabel)
-      })
-      Value.Unit
+        lookupRecordLabel(e, label.name)
 
-    case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
+      case Expression.RecordExtend(label, value, rest, tpe, loc) =>
+        val v = eval(value, env0, lenv0, root, currentLabel)
+        val r = eval(rest, env0, lenv0, root, currentLabel)
+        Value.RecordExtension(r, label.name, v)
 
-    case Expression.MatchError(_, loc) => throw new MatchError(loc.reified)
+      case Expression.RecordRestrict(label, rest, tpe, loc) =>
+        val r = eval(rest, env0, lenv0, root, currentLabel)
+        removeRecordLabel(r, label.name)
 
-    case Expression.Existential(params, exp, loc) => throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format}.")
+      case Expression.ArrayLit(elms, tpe, _) =>
+        val es = elms.map(e => eval(e, env0, lenv0, root, currentLabel))
+        Value.Arr(es.toArray, tpe.asInstanceOf[MonoType.Array].tpe)
 
-    case Expression.Universal(params, exp, loc) => throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format}.")
+      case Expression.ArrayNew(elm, len, tpe, _) =>
+        val e = eval(elm, env0, lenv0, root, currentLabel)
+        val ln = cast2int32(eval(len, env0, lenv0, root, currentLabel))
+        val array = new Array[AnyRef](ln)
+        for (i <- 0 until ln) {
+          array(i) = e
+        }
+        Value.Arr(array, tpe.asInstanceOf[MonoType.Array].tpe)
 
-    case Expression.Cast(exp, tpe, loc) =>
-      if (exp.tpe != tpe)
-        throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format} cast ${exp.tpe} to $tpe.")
-      eval(exp, env0, lenv0, root, currentLabel)
+      case Expression.ArrayLoad(base, index, _, _) =>
+        val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+        val indexCasted = cast2int32(eval(index, env0, lenv0, root, currentLabel))
+        if (0 <= indexCasted && indexCasted < array.elms.length)
+          array.elms(indexCasted)
+        else
+          throw InternalRuntimeException(s"Array index out of bounds: $index  Array length: ${array.elms.length}.")
 
-    case Expression.Force(_, _, _) => ???
+      case Expression.ArrayStore(base, index, elm, _, _) =>
+        val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+        val indexCasted = cast2int32(eval(index, env0, lenv0, root, currentLabel))
+        val obj = eval(elm, env0, lenv0, root, currentLabel)
+        if (0 <= indexCasted && indexCasted < array.elms.length) {
+          array.elms(indexCasted) = obj
+          Value.Unit
+        }
+        else
+          throw InternalRuntimeException(s"Array index out of bounds: $index  Array length: ${array.elms.length}.")
 
-    case Expression.Lazy(_, _, _) => ???
+      case Expression.ArrayLength(base, _, _) =>
+        val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+        Value.Int32(array.elms.length)
 
-    case Expression.Null(_, _) => ???
+      case Expression.ArraySlice(base, startIndex, endIndex, tpe, loc) =>
+        val array = cast2array(eval(base, env0, lenv0, root, currentLabel))
+        val i1Casted = cast2int32(eval(startIndex, env0, lenv0, root, currentLabel))
+        val i2Casted = cast2int32(eval(endIndex, env0, lenv0, root, currentLabel))
 
-    case Expression.K(exp, from, to, tpe, loc) => reduceK(from, to, eval(exp, env0, lenv0, root, from))
+        if (i1Casted >= i2Casted)
+          throw InternalRuntimeException(s"startIndex >= endIndex, startIndex: ${i1Casted}  endIndex: ${i2Casted}.")
+        else if (i1Casted < 0)
+          throw InternalRuntimeException(s"Invalid startIndex: ${i1Casted}.")
+        else if (i2Casted > array.elms.length)
+          throw InternalRuntimeException(s"endIndex out of bounds: ${i2Casted}    Array length: ${array.elms.length}.")
+        else {
+          val resultArray = new Array[AnyRef](i2Casted - i1Casted)
+
+          for (i <- i1Casted until i2Casted) {
+            resultArray(i - i1Casted) = array.elms(i)
+          }
+          Value.Arr(resultArray, tpe.asInstanceOf[MonoType.Array].tpe)
+        }
+
+      case Expression.Ref(exp, tpe, loc) =>
+        val box = new Value.Box()
+        val value = eval(exp, env0, lenv0, root, currentLabel)
+        box.setValue(value)
+        box
+
+      case Expression.Deref(exp, tpe, loc) =>
+        val box = cast2box(eval(exp, env0, lenv0, root, currentLabel))
+        box.getValue
+
+      case Expression.Assign(exp1, exp2, tpe, loc) =>
+        val box = cast2box(eval(exp1, env0, lenv0, root, currentLabel))
+        val value = eval(exp2, env0, lenv0, root, currentLabel)
+        box.setValue(value)
+        Value.Unit
+
+      case Expression.TryCatch(exp, rules, tpe, loc) =>
+        try {
+          eval(exp, env0, lenv0, root, currentLabel)
+        } catch {
+          case ex: Throwable =>
+            val exceptionClass = ex.getClass
+            for (CatchRule(sym, clazz, body) <- rules) {
+              if (clazz.isAssignableFrom(exceptionClass)) {
+                val env1 = env0 + (sym.toString -> ex)
+                return eval(body, env1, lenv0, root, currentLabel)
+              }
+            }
+            // Fallthrough, rethrow the exception.
+            throw ex
+        }
+
+      case Expression.InvokeConstructor(constructor, args, tpe, loc) =>
+        val values = evalArgs(args, env0, lenv0, root, currentLabel).map(toJava)
+        val arguments = values.toArray
+        fromJava(constructor.newInstance(arguments: _*).asInstanceOf[AnyRef])
+
+      case Expression.InvokeMethod(method, exp, args, tpe, loc) => Value.Unit //TODO
+
+      case Expression.InvokeStaticMethod(method, args, tpe, loc) =>
+        if (method.getName == "toString" && args.length == 1) {
+          println(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int32].lit)
+        }
+        Value.Unit //TODO
+
+      case Expression.GetField(field, exp, tpe, loc) => Value.Unit //TODO
+
+      case Expression.PutField(field, exp1, exp2, tpe, loc) => Value.Unit //TODO
+
+      case Expression.GetStaticField(field, tpe, loc) => Value.Unit //TODO
+
+      case Expression.PutStaticField(field, exp, tpe, loc) => Value.Unit //TODO
+
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
+        val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
+        val pols = pol map {
+          value =>
+            val Value.Arr(elms, _) = cast2array(value)
+            elms.map(cast2str).toList
+        }
+        Value.ChannelImpl(new JavaChannel(size), pols)
+
+      case Expression.GetChannel(exp, tpe, loc) =>
+        val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
+        c.get()
+
+      case Expression.PutChannel(exp1, exp2, tpe, loc) =>
+        val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
+        val e2 = eval(exp2, env0, lenv0, root, currentLabel)
+        c.put(e2)
+
+      case Expression.SelectChannel(rules, default, tpe, loc) =>
+        // Evaluate all Channel expressions
+        val rs = rules.map { r =>
+          (r.sym, eval(r.chan, env0, lenv0, root, currentLabel), r.exp)
+        }
+        // Create an array of Channels used to call select in Channel.java
+        val channelsArray = rs.map { r => r._2 }
+        // Check if there is a default case
+        val hasDefault = default.isDefined
+        // Call select which returns a selectChoice with the given branchNumber
+        val selectChoice = Value.Channel.select(channelsArray, hasDefault, loc)
+
+        // Check if the default case was selected
+        if (selectChoice.defaultChoice) {
+          // Evaluate the default case
+          return eval(default.get, env0, lenv0, root, currentLabel)
+        }
+
+        // The default was not chosen. Find the matching rule
+        val selectedRule = rs.apply(selectChoice.branchNumber)
+        // Bind the sym of the rule to the element from the selected channel
+        val newEnv = env0 + (selectedRule._1.toString -> selectChoice.element)
+        // Evaluate the expression of the selected rule
+        eval(selectedRule._3, newEnv, lenv0, root, currentLabel)
+
+      case Expression.Spawn(exp, tpe, loc) =>
+        JavaChannel.spawn(() => {
+          val e = eval(exp, env0, lenv0, root, currentLabel)
+          invokeClo(e, List(), env0, lenv0, root, currentLabel)
+        })
+        Value.Unit
+
+      case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
+
+      case Expression.MatchError(_, loc) => throw new MatchError(loc.reified)
+
+      case Expression.Existential(params, exp, loc) => throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format}.")
+
+      case Expression.Universal(params, exp, loc) => throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format}.")
+
+      case Expression.Cast(exp, tpe, loc) =>
+        if (exp.tpe != tpe)
+          throw InternalRuntimeException(s"Unexpected expression: '$exp' at ${loc.source.format} cast ${exp.tpe} to $tpe.")
+        eval(exp, env0, lenv0, root, currentLabel)
+
+      case Expression.Force(_, _, _) => ???
+
+      case Expression.Lazy(_, _, _) => ???
+
+      case Expression.Null(_, _) => ???
+
+      case Expression.K(exp, from, to, tpe, loc) => reduceK(from, to, eval(exp, env0, lenv0, root, from))
+    }
   }
 
   /**
@@ -651,7 +641,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
           case (macc, (formal, actual)) => macc + (formal.sym.toString -> actual)
         }
         eval(constant.exp, env2, Map.empty, root, currentLabel)
-      case l: Value. Lambda => l.call(args, env0, lenv0, root)
+      case l: Value.Lambda => l.call(args, env0, lenv0, root)
     }
   }
 
@@ -680,7 +670,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
   def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = value match {
     case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Arr => value
-    case _: Channel | _: Value.Guard => Value.Guard(value, fromLabel, toLabel)
+    case c: Value.Channel => Value.Guard(c, fromLabel, toLabel)
     case _: Value.Closure | _: Value.Lambda => Value.Lambda(value, fromLabel, toLabel)
   }
 
@@ -715,6 +705,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /////////////////////////////////////////////////////////////////////////////
   // Invoke                                                                  //
   /////////////////////////////////////////////////////////////////////////////
+
   /**
     * Returns an invocation target for the Flix function corresponding to the given symbol `sym`.
     */
@@ -796,6 +787,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /////////////////////////////////////////////////////////////////////////////
   // Casts                                                                   //
   /////////////////////////////////////////////////////////////////////////////
+
   /**
     * Casts the given reference `ref` to a primitive boolean.
     */
@@ -925,9 +917,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case _ => throw InternalRuntimeException(s"Unexpected non-array value: ${ref.getClass.getName}.")
   }
 
-  private def cast2channel(ref: AnyRef): Channel = ref match {
-    case c: Channel => c
-    case g: Guard => g.getChannel
+  private def cast2channel(ref: AnyRef): Value.Channel = ref match {
+    case c: Value.Channel => c
     case _ => throw InternalRuntimeException(s"Unexpected non-channel or non-guard value: ${ref.getClass.getName}.")
   }
 
@@ -1035,85 +1026,5 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       * Returns the primary source location of the error.
       */
     override def loc: SourceLocation = locc
-  }
-
-  def select(channels: List[AnyRef], hasDefault: Boolean, loc: SourceLocation): SelectChoice = {
-    // Create new Condition and channelLock the current thread
-    val selectLock: Lock = new ReentrantLock()
-    val condition: Condition = selectLock.newCondition()
-
-    // Sort channels to avoid deadlock when locking
-    val sortedChannels: List[Channel] = Channel.sortChannels(channels.map(cast2channel).toArray).toList
-    while (!Thread.interrupted()) {
-      // Lock all channels in sorted order
-      Channel.lockAllChannels(sortedChannels.toArray)
-      try {
-        // Lock the select lock after the channels
-        selectLock.lock()
-
-        try {
-          // Find channels with waiting elements in a random order to prevent backpressure.
-          {
-            // Build list mapping a channel to it's branchNumber (the index of the 'channels' array)
-            var channelIndexPairs = channels.zip(channels.indices)
-
-            // Randomize the order channels are looked at.
-            // This prevents backpressure from building up on one channel.
-            channelIndexPairs = Random.shuffle(channelIndexPairs)
-
-            // Find channels with waiting elements
-            for (channelIndexPair <- channelIndexPairs) {
-              val element = channelIndexPair match {
-                case (c: Channel, _) =>
-                  println(s"tryGet channel with no guard @$loc")
-                  c.tryGet()
-                //TODO(LBS) check if we are allowed to try and get from the channel if there is a guard
-                case (g: Guard, _) =>
-                  println(s"tryGet channel with guard ${g.toString} @$loc")
-                  g.getChannel.tryGet()
-              }
-
-              if (element != null) {
-                // There is a waiting element in this channel.
-                // Return the element and the branchNumber of this channel
-                return new SelectChoice(channelIndexPair._2, element)
-              }
-            }
-          }
-
-          // No element was found.
-
-          // If there is a default case, choose this
-          if (hasDefault) {
-            return SelectChoice.DEFAULT_CHOICE
-          }
-
-          // Add our condition to all channels to get notified when a new element is added
-          for (channel <- channels) {
-            channel match {
-              case (c: Channel, _) => c.addGetter(selectLock, condition)
-              //TODO(LBS) check if we are allowed to add getter notification to the channel if there is a guard
-              case (g: Guard, _) => g.getChannel.addGetter(selectLock, condition)
-            }
-          }
-        } finally {
-          // Unlock all channels in sorted order, so other threads may input elements
-          Channel.unlockAllChannels(sortedChannels.toArray)
-        }
-
-        // Wait for an element to be added to any of the channels
-        condition.await()
-      } catch {
-        case _: InterruptedException => throw new RuntimeException("Thread interrupted");
-      } finally {
-        // Unlock the selectLock, which is relevant when a different thread wants to put
-        // an element into a channel that was not selected from the select.
-        // This other channel will then signal the condition from selectLock (in the put method),
-        // so it needs the lock.
-        selectLock.unlock()
-      }
-    }
-
-    throw new RuntimeException("Thread interrupted");
   }
 }

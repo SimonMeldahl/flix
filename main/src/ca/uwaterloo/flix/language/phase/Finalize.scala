@@ -334,10 +334,11 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
         val t = visitType(tpe)
         FinalAst.Expression.PutStaticField(field, e, t, loc)
 
-      case LiftedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case LiftedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visit(exp)
         val t = visitType(tpe)
-        FinalAst.Expression.NewChannel(e, t, loc)
+        val p = pol.map(visit)
+        FinalAst.Expression.NewChannel(e, p, t, loc)
 
       case LiftedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visit(exp)

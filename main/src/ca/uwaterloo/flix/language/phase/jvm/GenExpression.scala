@@ -998,11 +998,15 @@ object GenExpression {
       // Push Unit on the stack.
       visitor.visitMethodInsn(INVOKESTATIC, JvmName.Runtime.Value.Unit.toInternalName, "getInstance", AsmOps.getMethodDescriptor(Nil, JvmType.Unit), false)
 
-    case Expression.NewChannel(exp, tpe, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, loc) =>
       addSourceLine(visitor, loc)
       visitor.visitTypeInsn(NEW, JvmName.Channel.toInternalName)
       visitor.visitInsn(DUP)
       compileExpression(exp, visitor, currentClass, lenv0, entryPoint)
+      pol.foreach { p =>
+        compileExpression(p, visitor, currentClass, lenv0, entryPoint)
+        visitor.visitInsn(POP)
+      }
       visitor.visitMethodInsn(INVOKESPECIAL, JvmName.Channel.toInternalName, "<init>", "(I)V", false)
 
     case Expression.GetChannel(exp, tpe, loc) =>

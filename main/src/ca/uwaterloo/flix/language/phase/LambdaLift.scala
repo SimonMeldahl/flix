@@ -313,9 +313,10 @@ object LambdaLift extends Phase[SimplifiedAst.Root, LiftedAst.Root] {
         val e = visitExp(exp)
         LiftedAst.Expression.PutStaticField(field, e, tpe, loc)
 
-      case SimplifiedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case SimplifiedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        LiftedAst.Expression.NewChannel(e, tpe, loc)
+        val p = pol.map(visitExp)
+        LiftedAst.Expression.NewChannel(e, p, tpe, loc)
 
       case SimplifiedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)

@@ -379,10 +379,11 @@ object PrettyPrinter {
           vt.text(" value ")
           visitExp(exp)
 
-        case Expression.NewChannel(exp, tpe, loc) =>
+        case Expression.NewChannel(exp, pol, tpe, loc) =>
           vt.text("Channel")
           vt.text(" ")
           visitExp(exp)
+          pol.foreach{vt.text(" "); visitExp}
 
         case Expression.PutChannel(exp1, exp2, tpe, loc) =>
           visitExp(exp1)
