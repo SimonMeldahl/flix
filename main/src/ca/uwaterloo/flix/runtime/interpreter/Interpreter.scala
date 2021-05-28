@@ -29,9 +29,7 @@ import ca.uwaterloo.flix.runtime.interpreter.Value.Guard
 import flix.runtime.{HoleError, ProxyObject}
 
 import java.math.BigInteger
-import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.locks.{Condition, Lock, ReentrantLock}
-import scala.reflect.internal.util.Collections
 import scala.util.Random
 
 object Interpreter extends Phase[Root, Array[String] => Int] {

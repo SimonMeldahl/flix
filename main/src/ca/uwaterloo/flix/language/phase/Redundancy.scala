@@ -500,10 +500,15 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       visitExp(exp, env0)
 
-    case Expression.NewChannel(exp, _, _, _) =>
-      visitExp(exp, env0)
+    case Expression.NewChannel(exp, pol, _, _, _) =>
+      val polVal = pol match {
+        case Some(pol) => visitExp(pol, env0)
+        case None => Used.empty
+      }
 
-    case Expression.GetChannel(exp, _, _, _) =>
+      visitExp(exp, env0) and polVal
+
+   case Expression.GetChannel(exp, _, _, _) =>
       visitExp(exp, env0)
 
     case Expression.PutChannel(exp1, exp2, _, _, _) =>

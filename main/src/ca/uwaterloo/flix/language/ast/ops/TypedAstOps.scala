@@ -193,7 +193,7 @@ object TypedAstOps {
       case Expression.PutStaticField(field, exp, tpe, eff, loc) =>
         visitExp(exp, env0)
 
-      case Expression.NewChannel(exp, tpe, eff, loc) => visitExp(exp, env0)
+      case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp, env0) ++ pol.map(visitExp(_, env0)).getOrElse(Map.empty)
 
       case Expression.GetChannel(exp, tpe, eff, loc) => visitExp(exp, env0)
 
@@ -373,7 +373,7 @@ object TypedAstOps {
     case Expression.PutField(_, exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.GetStaticField(_, _, _, _) => Set.empty
     case Expression.PutStaticField(_, exp, _, _, _) => sigSymsOf(exp)
-    case Expression.NewChannel(exp, _, _, _) => sigSymsOf(exp)
+    case Expression.NewChannel(exp, pol, _, _, _) => sigSymsOf(exp) ++ pol.toSet.flatMap(sigSymsOf)
     case Expression.GetChannel(exp, _, _, _) => sigSymsOf(exp)
     case Expression.PutChannel(exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.SelectChannel(rules, default, _, _, _) => rules.flatMap(rule => sigSymsOf(rule.chan) ++ sigSymsOf(rule.exp)).toSet ++ default.toSet.flatMap(sigSymsOf)
@@ -598,8 +598,8 @@ object TypedAstOps {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       freeVars(exp)
 
-    case Expression.NewChannel(exp, _, _, _) =>
-      freeVars(exp)
+    case Expression.NewChannel(exp, pol, _, _, _) =>
+      freeVars(exp) ++ pol.map(freeVars).getOrElse(Map.empty)
 
     case Expression.GetChannel(exp, _, _, _) =>
       freeVars(exp)

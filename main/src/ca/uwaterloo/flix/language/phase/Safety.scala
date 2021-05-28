@@ -189,7 +189,7 @@ object Safety extends Phase[Root, Root] {
     case Expression.PutStaticField(field, exp, tpe, eff, loc) =>
       visitExp(exp)
 
-    case Expression.NewChannel(exp, tpe, eff, loc) => visitExp(exp)
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp) ::: pol.map(visitExp).getOrElse(Nil)
 
     case Expression.GetChannel(exp, tpe, eff, loc) => visitExp(exp)
 

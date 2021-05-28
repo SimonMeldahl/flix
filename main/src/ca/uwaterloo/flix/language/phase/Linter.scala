@@ -209,7 +209,7 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
       case Expression.PutStaticField(_, exp, _, _, _) => visitExp(exp, lint0)
 
-      case Expression.NewChannel(exp, _, _, _) => visitExp(exp, lint0)
+      case Expression.NewChannel(exp, pol, _, _, _) => visitExp(exp, lint0) ::: pol.map(visitExp(_, lint0)).getOrElse(Nil)
 
       case Expression.GetChannel(exp, _, _, _) => visitExp(exp, lint0)
 
@@ -508,8 +508,12 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
     case (Expression.PutStaticField(field1, exp1, _, _, _), Expression.PutStaticField(field2, exp2, _, _, _)) if field1 == field2 =>
       unifyExp(exp1, exp2, metaVars)
 
-    case (Expression.NewChannel(exp1, _, _, _), Expression.NewChannel(exp2, _, _, _)) =>
-      unifyExp(exp1, exp2, metaVars)
+    case (Expression.NewChannel(exp1, pol1, _, _, _), Expression.NewChannel(exp2, pol2, _, _, _)) =>
+      (pol1, pol2) match {
+        case (Some(p1), Some(p2)) => unifyExp(exp1, p1, exp2, p2, metaVars)
+        case (None, None) => unifyExp(exp1, exp2, metaVars)
+        case _ => None
+      }
 
     case (Expression.GetChannel(exp1, _, _, _), Expression.GetChannel(exp2, _, _, _)) =>
       unifyExp(exp1, exp2, metaVars)
@@ -892,9 +896,10 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
         val e = apply(exp)
         Expression.PutStaticField(field, e, tpe, eff, loc)
 
-      case Expression.NewChannel(exp, tpe, eff, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
         val e = apply(exp)
-        Expression.NewChannel(e, tpe, eff, loc)
+        val p = pol.map(apply)
+        Expression.NewChannel(e, p, tpe, eff, loc)
 
       case Expression.GetChannel(exp, tpe, eff, loc) =>
         val e = apply(exp)

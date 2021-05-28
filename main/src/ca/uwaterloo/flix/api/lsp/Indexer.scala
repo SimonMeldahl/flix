@@ -279,8 +279,8 @@ object Indexer {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
 
-    case Expression.NewChannel(exp, _, _, _) =>
-      visitExp(exp) ++ Index.occurrenceOf(exp0)
+    case Expression.NewChannel(exp, pol, _, _, _) =>
+      visitExp(exp) ++ pol.map(visitExp).getOrElse(Index.empty) ++ Index.occurrenceOf(exp0)
 
     case Expression.GetChannel(exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)

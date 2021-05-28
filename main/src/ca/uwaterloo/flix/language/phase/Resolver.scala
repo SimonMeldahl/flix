@@ -790,11 +790,20 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
             case (field, e) => ResolvedAst.Expression.PutStaticField(field, e, loc)
           }
 
-        case NamedAst.Expression.NewChannel(exp, tpe, loc) =>
+        case NamedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
+          val polVal = pol match {
+            case Some(pol) =>
+              for {
+                pol <- visit(exp, tenv0)
+              } yield Some(pol)
+            case None => None.toSuccess
+          }
+
           for {
             t <- lookupType(tpe, ns0, root)
             e <- visit(exp, tenv0)
-          } yield ResolvedAst.Expression.NewChannel(e, t, loc)
+            p <- polVal
+          } yield ResolvedAst.Expression.NewChannel(e, p, t, loc)
 
         case NamedAst.Expression.GetChannel(exp, tvar, loc) =>
           for {

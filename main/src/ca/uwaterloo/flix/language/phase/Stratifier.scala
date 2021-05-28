@@ -314,9 +314,16 @@ object Stratifier extends Phase[Root, Root] {
         case e => Expression.PutStaticField(field, e, tpe, eff, loc)
       }
 
-    case Expression.NewChannel(exp, tpe, eff, loc) =>
-      mapN(visitExp(exp)) {
-        case e => Expression.NewChannel(e, tpe, eff, loc)
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
+      val polVal = pol match {
+        case Some(pol) => visitExp(pol) map {
+          pol => Some(pol)
+        }
+        case None => None.toSuccess
+      }
+
+      mapN(visitExp(exp), polVal) {
+        (e, p) => Expression.NewChannel(e, p, tpe, eff, loc)
       }
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
@@ -583,8 +590,8 @@ object Stratifier extends Phase[Root, Root] {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       dependencyGraphOfExp(exp)
 
-    case Expression.NewChannel(exp, _, _, _) =>
-      dependencyGraphOfExp(exp)
+    case Expression.NewChannel(exp, pol, _, _, _) =>
+      dependencyGraphOfExp(exp) + pol.map(dependencyGraphOfExp).getOrElse(DependencyGraph.empty)
 
     case Expression.GetChannel(exp, _, _, _) =>
       dependencyGraphOfExp(exp)

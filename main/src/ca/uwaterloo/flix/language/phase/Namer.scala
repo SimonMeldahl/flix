@@ -801,9 +801,16 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
         case e => NamedAst.Expression.PutStaticField(className, fieldName, e, loc)
       }
 
-    case WeededAst.Expression.NewChannel(exp, tpe, loc) =>
-      mapN(visitExp(exp, env0, uenv0, tenv0), visitType(tpe, uenv0, tenv0)) {
-        case (e, t) => NamedAst.Expression.NewChannel(e, t, loc)
+    case WeededAst.Expression.NewChannel(exp, policy, tpe, loc) =>
+      val pol = policy match {
+        case Some(pol) => visitExp(pol, env0, uenv0, tenv0) map {
+          pol => Some(pol)
+        }
+        case None => None.toSuccess
+      }
+
+      mapN(visitExp(exp, env0, uenv0, tenv0), visitType(tpe, uenv0, tenv0), pol) {
+        (e, t, p) => NamedAst.Expression.NewChannel(e, p, t, loc)
       }
 
     case WeededAst.Expression.GetChannel(exp, loc) =>
@@ -1257,7 +1264,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     case WeededAst.Expression.PutField(className, fieldName, exp1, exp2, loc) => freeVars(exp1) ++ freeVars(exp2)
     case WeededAst.Expression.GetStaticField(className, fieldName, loc) => Nil
     case WeededAst.Expression.PutStaticField(className, fieldName, exp, loc) => freeVars(exp)
-    case WeededAst.Expression.NewChannel(tpe, exp, loc) => freeVars(exp) // TODO exp is a Type. is this a bug?
+    case WeededAst.Expression.NewChannel(exp, pol, tpe, loc) => freeVars(exp) ++ pol.map(freeVars).getOrElse(Nil)
     case WeededAst.Expression.GetChannel(exp, loc) => freeVars(exp)
     case WeededAst.Expression.PutChannel(exp1, exp2, loc) => freeVars(exp1) ++ freeVars(exp2)
     case WeededAst.Expression.SelectChannel(rules, default, loc) =>

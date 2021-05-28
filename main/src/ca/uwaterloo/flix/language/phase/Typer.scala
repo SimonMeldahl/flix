@@ -1229,18 +1229,27 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
           resultEff = Type.Impure
         } yield (valueConstrs, resultTyp, resultEff)
 
-      case ResolvedAst.Expression.NewChannel(exp, declaredType, loc) =>
+      case ResolvedAst.Expression.NewChannel(exp, pol, declaredType, loc) =>
         //
         //  exp: Int @ _
         //  ---------------------------------
         //  channel exp : Channel[t] @ Impure
         //
+
+        def inferPol(pol: Option[ResolvedAst.Expression]): InferMonad[(List[Ast.TypeConstraint], Type, Type)] =
+          pol match {
+            case Some(pol) => visitExp(pol)
+            case None => liftM(Nil, Type.freshVar(Kind.Star), Type.Pure)
+          }
+
         for {
           (constrs, tpe, _) <- visitExp(exp)
+          (polConstrs, polTpe, _) <- inferPol(pol)
           lengthType <- unifyTypeM(tpe, Type.Int32, loc)
+          polIsList <- unifyTypeM(polTpe, Type.Apply(Type.Array, Type.Str), loc)
           resultTyp <- liftM(Type.mkChannel(declaredType))
           resultEff = Type.Impure
-        } yield (constrs, resultTyp, resultEff)
+        } yield (constrs ++ polConstrs, resultTyp, resultEff)
 
       case ResolvedAst.Expression.GetChannel(exp, tvar, loc) =>
         val elementType = Type.freshVar(Kind.Star)
@@ -1724,10 +1733,11 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         val eff = Type.Impure
         TypedAst.Expression.PutStaticField(field, e, tpe, eff, loc)
 
-      case ResolvedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case ResolvedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp, subst0)
+        val p = pol.map(visitExp(_, subst0))
         val eff = Type.Impure
-        TypedAst.Expression.NewChannel(e, Type.mkChannel(tpe), eff, loc)
+        TypedAst.Expression.NewChannel(e, p, Type.mkChannel(tpe), eff, loc)
 
       case ResolvedAst.Expression.GetChannel(exp, tvar, loc) =>
         val e = visitExp(exp, subst0)
