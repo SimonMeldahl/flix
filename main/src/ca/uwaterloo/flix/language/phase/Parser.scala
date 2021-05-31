@@ -629,7 +629,7 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     def Primary: Rule1[ParsedAst.Expression] = rule {
       LetMatch | LetMatchStar | LetUse | LetImport | IfThenElse | Choose | Match | LambdaMatch | TryCatch | Lambda | Tuple |
         RecordOperation | RecordLiteral | Block | RecordSelectLambda | NewChannel |
-        GetChannel | SelectChannel | Spawn | Lazy | Force | Intrinsic | ArrayLit | ArrayNew |
+        GetChannel | SelectChannel | Con | Spawn | Lazy | Force | Intrinsic | ArrayLit | ArrayNew |
         FNil | FSet | FMap | ConstraintSet | FixpointProject | FixpointSolveWithProject | FixpointQueryWithSelect |
         ConstraintSingleton | Interpolation | Literal | Existential | Universal |
         UnaryLambda | FName | Tag | Hole
@@ -819,6 +819,29 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
 
     def Spawn: Rule1[ParsedAst.Expression.Spawn] = rule {
       SP ~ keyword("spawn") ~ WS ~ Expression ~ SP ~> ParsedAst.Expression.Spawn
+    }
+
+    def Con: Rule1[ParsedAst.Expression.Con] = {
+      //TODO(LBS) maybe wrong association
+      def conArrow: Rule1[ParsedAst.ConRule] = rule {
+        conPrimary ~ optional(WS ~ atomic("->") ~ WS ~ conArrow ~> ParsedAst.ConArrow)
+      }
+
+      def conPrimary: Rule1[ParsedAst.ConRule] = rule {
+        conWhiteList | conBase | ( "(" ~ optWS ~ conArrow ~ optWS ~ ")" )
+      }
+
+      def conWhiteList: Rule1[ParsedAst.ConRule] = rule {
+        Expression ~> ParsedAst.ConWhiteList
+      }
+
+      def conBase: Rule1[ParsedAst.ConRule] = rule {
+        Type ~> ParsedAst.ConBase
+      }
+
+      rule {
+        SP ~ keyword("con") ~ "(" ~ optWS ~ conArrow ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con
+      }
     }
 
     def Lazy: Rule1[ParsedAst.Expression.Lazy] = rule {

@@ -843,6 +843,26 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
             e <- visit(exp, tenv0)
           } yield ResolvedAst.Expression.Spawn(e, loc)
 
+        case NamedAst.Expression.Con(con, chan, loc) =>
+          def visitCon(con: NamedAst.ConRule): Validation[ResolvedAst.ConRule, ResolutionError] = con match {
+            case NamedAst.ConArrow(c1, c2) => for {
+              c1 <- visitCon(c1)
+              c2 <- visitCon(c2)
+            } yield ResolvedAst.ConArrow(c1, c2)
+            case NamedAst.ConWhiteList(wl) => for {
+              wl <- visit(wl, tenv0)
+            } yield ResolvedAst.ConWhiteList(wl)
+            case NamedAst.ConBase(t) => for {
+              t <- lookupType(t, ns0, root)
+            } yield ResolvedAst.ConBase(t)
+          }
+
+          for {
+            con <- visitCon(con)
+            chan <- visit(chan, tenv0)
+          } yield ResolvedAst.Expression.Con(con, chan, loc)
+
+
         case NamedAst.Expression.Lazy(exp, loc) =>
           for {
             e <- visit(exp, tenv0)

@@ -508,7 +508,7 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
 
       visitExp(exp, env0) and polVal
 
-   case Expression.GetChannel(exp, _, _, _) =>
+    case Expression.GetChannel(exp, _, _, _) =>
       visitExp(exp, env0)
 
     case Expression.PutChannel(exp1, exp2, _, _, _) =>
@@ -546,6 +546,14 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
       }
 
     case Expression.Spawn(exp, _, _, _) => visitExp(exp, env0)
+
+    case Expression.Con(con, chan, tpe, eff, loc) =>
+      def visitCon(con: TypedAst.ConRule): Used = con match {
+        case TypedAst.ConArrow(c1, c2) => visitCon(c1) and visitCon(c2)
+        case TypedAst.ConWhiteList(wl) => visitExp(wl, env0)
+        case TypedAst.ConBase(_) => Used.empty
+      }
+      visitCon(con) and visitExp(chan, env0)
 
     case Expression.Lazy(exp, _, _) =>
       // Remove the recursion context as `exp` will not necessarily be evaluated.

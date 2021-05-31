@@ -188,6 +188,8 @@ object NamedAst {
 
     case class Spawn(exp: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
+    case class Con(con: NamedAst.ConRule, chan: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
+
     case class Lazy(exp: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
     case class Force(exp: NamedAst.Expression, tvar: ast.Type.Var, loc: SourceLocation) extends NamedAst.Expression
@@ -365,6 +367,15 @@ object NamedAst {
   case class MatchRule(pat: NamedAst.Pattern, guard: NamedAst.Expression, exp: NamedAst.Expression)
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: NamedAst.Expression, exp: NamedAst.Expression)
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList(wl: NamedAst.Expression) extends ConRule
+
+  case class ConBase(t: Type) extends ConRule
+
 
   case class TypeParam(name: Name.Ident, tpe: ast.Type.Var, loc: SourceLocation)
 

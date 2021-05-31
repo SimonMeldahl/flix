@@ -18,7 +18,7 @@ package ca.uwaterloo.flix.language.phase
 
 import ca.uwaterloo.flix.api.Flix
 import ca.uwaterloo.flix.language.ast.Ast.Denotation
-import ca.uwaterloo.flix.language.ast.ParsedAst.SelectFragment
+import ca.uwaterloo.flix.language.ast.ParsedAst.{Expression, SelectFragment}
 import ca.uwaterloo.flix.language.ast._
 import ca.uwaterloo.flix.language.errors.WeederError
 import ca.uwaterloo.flix.language.errors.WeederError._
@@ -1305,6 +1305,21 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
         case e => WeededAst.Expression.Spawn(e, mkSL(sp1, sp2))
       }
 
+    case ParsedAst.Expression.Con(sp1, con, chan, sp2) =>
+      def visitCon(con: ParsedAst.ConRule): Validation[WeededAst.ConRule, WeederError] = con match {
+        case ParsedAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
+          (c1, c2) => WeededAst.ConArrow(c1, c2)
+        }
+        case ParsedAst.ConWhiteList(wl) => visitExp(wl) map {
+          wl => WeededAst.ConWhiteList(wl)
+        }
+        case ParsedAst.ConBase(t) => WeededAst.ConBase(visitType(t)).toSuccess
+      }
+
+      mapN(visitCon(con), visitExp(chan)) {
+        (con, chan) => WeededAst.Expression.Con(con, chan, mkSL(sp1, sp2))
+      }
+
     case ParsedAst.Expression.Lazy(sp1, exp, sp2) =>
       visitExp(exp) map {
         case e => WeededAst.Expression.Lazy(e, mkSL(sp1, sp2))
@@ -2322,6 +2337,7 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     case ParsedAst.Expression.PutChannel(e1, _, _) => leftMostSourcePosition(e1)
     case ParsedAst.Expression.SelectChannel(sp1, _, _, _) => sp1
     case ParsedAst.Expression.Spawn(sp1, _, _) => sp1
+    case ParsedAst.Expression.Con(sp1, _, _, _) => sp1
     case ParsedAst.Expression.Lazy(sp1, _, _) => sp1
     case ParsedAst.Expression.Force(sp1, _, _) => sp1
     case ParsedAst.Expression.FixpointConstraint(sp1, _, _) => sp1

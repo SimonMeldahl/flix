@@ -71,6 +71,13 @@ object FormatExpression {
     case TypedAst.Expression.PutChannel(exp1, exp2, tpe, eff, loc) => s"PutChannel($exp1, $exp2)"
     case TypedAst.Expression.SelectChannel(rules, default, tpe, eff, loc) => s"SelectChannel(${rules.mkString(", ")}, $default)"
     case TypedAst.Expression.Spawn(exp, tpe, eff, loc) => s"Spawn($exp)"
+    case TypedAst.Expression.Con(con, chan, tpe, eff, loc) =>
+      def visitCon(con: TypedAst.ConRule): String = con match {
+        case TypedAst.ConArrow(c1, c2) => s"ConArrow(${visitCon(c1)}, ${visitCon(c2)})"
+        case TypedAst.ConWhiteList(wl) => s"ConWhiteList(${format(wl)})"
+        case TypedAst.ConBase(t) => s"ConBase(_)"
+      }
+      s"Con(${visitCon(con)}, ${format(chan)})"
     case TypedAst.Expression.Lazy(exp, tpe, loc) => s"Lazy($exp)"
     case TypedAst.Expression.Force(exp, tpe, eff, loc) => s"Force($exp)"
     case TypedAst.Expression.FixpointConstraintSet(cs, stf, tpe, loc) => s"FixpointConstraintSet($cs})"

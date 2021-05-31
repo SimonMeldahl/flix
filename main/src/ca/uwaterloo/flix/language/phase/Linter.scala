@@ -222,6 +222,14 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
       case Expression.Spawn(exp, _, _, _) => visitExp(exp, lint0)
 
+      case Expression.Con(con, chan, tpe, eff, loc) =>
+        def visitCon(con: ConRule): List[LinterError] = con match {
+          case ConArrow(c1, c2) => visitCon(c1) ::: visitCon(c2)
+          case ConWhiteList(wl) => visitExp(wl, lint0)
+          case ConBase(t) => List.empty
+        }
+        visitCon(con) ::: visitExp(chan, lint0)
+
       case Expression.Lazy(exp, _, _) => visitExp(exp, lint0)
 
       case Expression.Force(exp, _, _, _) => visitExp(exp, lint0)
@@ -531,6 +539,10 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
     case (Expression.Spawn(exp1, _, _, _), Expression.Spawn(exp2, _, _, _)) =>
       unifyExp(exp1, exp2, metaVars)
+
+    case (_: Expression.Con, _) => None
+
+    case (_, _: Expression.Con) => None
 
     case (Expression.FixpointConstraintSet(_, _, _, _), Expression.FixpointConstraintSet(_, _, _, _)) =>
       // NB: We currently do not perform unification inside constraint sets.
@@ -920,6 +932,14 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
       case Expression.Spawn(exp, tpe, eff, loc) =>
         val e = apply(exp)
         Expression.Spawn(e, tpe, eff, loc)
+
+      case Expression.Con(con, chan, tpe, eff, loc) =>
+        def visitCon(con: ConRule): ConRule = con match {
+          case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
+          case ConWhiteList(wl) => ConWhiteList(apply(wl))
+          case ConBase(t) => ConBase(t)
+        }
+        Expression.Con(visitCon(con), apply(chan), tpe, eff, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = apply(exp)

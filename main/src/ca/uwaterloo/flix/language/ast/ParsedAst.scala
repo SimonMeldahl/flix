@@ -904,6 +904,8 @@ object ParsedAst {
       */
     case class Spawn(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
+    case class Con(sp1: SourcePosition, con: ParsedAst.ConRule, chan: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
+
     /**
       * Lazy Expression.
       *
@@ -1506,6 +1508,14 @@ object ParsedAst {
     * @param exp   the body expression of the rule.
     */
   case class SelectChannelRule(ident: Name.Ident, chan: ParsedAst.Expression, exp: ParsedAst.Expression)
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList(wl: ParsedAst.Expression) extends ConRule
+
+  case class ConBase(t: Type) extends ConRule
 
   /**
     * Modifier.

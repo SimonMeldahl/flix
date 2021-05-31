@@ -171,6 +171,8 @@ object ResolvedAst {
 
     case class Spawn(exp: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
 
+    case class Con(con: ResolvedAst.ConRule, chan: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
+
     case class Lazy(exp: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
 
     case class Force(exp: ResolvedAst.Expression, tpe: Type.Var, loc: SourceLocation) extends ResolvedAst.Expression
@@ -300,6 +302,14 @@ object ResolvedAst {
   case class MatchRule(pat: ResolvedAst.Pattern, guard: ResolvedAst.Expression, exp: ResolvedAst.Expression)
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: ResolvedAst.Expression, exp: ResolvedAst.Expression)
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList(wl: ResolvedAst.Expression) extends ConRule
+
+  case class ConBase(t: Type) extends ConRule
 
   case class TypeParam(name: Name.Ident, tpe: Type.Var, loc: SourceLocation)
 

@@ -189,6 +189,8 @@ object WeededAst {
 
     case class Spawn(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
+    case class Con(con: WeededAst.ConRule, chan: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
+
     case class Lazy(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class Force(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
@@ -373,6 +375,14 @@ object WeededAst {
   case class MatchRule(pat: WeededAst.Pattern, guard: WeededAst.Expression, exp: WeededAst.Expression)
 
   case class SelectChannelRule(ident: Name.Ident, channel: WeededAst.Expression, exp: WeededAst.Expression)
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList(wl: WeededAst.Expression) extends ConRule
+
+  case class ConBase(t: Type) extends ConRule
 
   sealed trait TypeParam
 

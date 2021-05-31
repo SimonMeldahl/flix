@@ -850,6 +850,23 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
         case e => NamedAst.Expression.Spawn(e, loc)
       }
 
+    case WeededAst.Expression.Con(con, chan, loc) =>
+      def visitCon(con: WeededAst.ConRule): Validation[NamedAst.ConRule, NameError] = con match {
+        case WeededAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
+          (c1, c2) => NamedAst.ConArrow(c1, c2)
+        }
+        case WeededAst.ConWhiteList(wl) => visitExp(wl, env0, uenv0, tenv0) map {
+          wl => NamedAst.ConWhiteList(wl)
+        }
+        case WeededAst.ConBase(t) => visitType(t, uenv0, tenv0) map {
+          t => NamedAst.ConBase(t)
+        }
+      }
+
+      mapN(visitCon(con), visitExp(chan, env0, uenv0, tenv0)) {
+        (con, chan) => NamedAst.Expression.Con(con, chan, loc)
+      }
+
     case WeededAst.Expression.Lazy(exp, loc) =>
       visitExp(exp, env0, uenv0, tenv0) map {
         case e => NamedAst.Expression.Lazy(e, loc)
@@ -1264,7 +1281,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     case WeededAst.Expression.PutField(className, fieldName, exp1, exp2, loc) => freeVars(exp1) ++ freeVars(exp2)
     case WeededAst.Expression.GetStaticField(className, fieldName, loc) => Nil
     case WeededAst.Expression.PutStaticField(className, fieldName, exp, loc) => freeVars(exp)
-    case WeededAst.Expression.NewChannel(exp, pol, tpe, loc) => freeVars(exp) ++ pol.map(freeVars).getOrElse(Nil)
+    case WeededAst.Expression.NewChannel(exp, pol, tpe, loc) => freeVars(exp) ++ pol.map(freeVars).getOrElse(Nil) ++ freeVars(tpe)
     case WeededAst.Expression.GetChannel(exp, loc) => freeVars(exp)
     case WeededAst.Expression.PutChannel(exp1, exp2, loc) => freeVars(exp1) ++ freeVars(exp2)
     case WeededAst.Expression.SelectChannel(rules, default, loc) =>
@@ -1275,6 +1292,13 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       val defaultFreeVars = default.map(freeVars).getOrElse(Nil)
       rulesFreeVars ++ defaultFreeVars
     case WeededAst.Expression.Spawn(exp, loc) => freeVars(exp)
+    case WeededAst.Expression.Con(con, chan, loc) =>
+      def freeVarsCons(con: WeededAst.ConRule): List[Name.Ident] = con match {
+        case WeededAst.ConArrow(c1, c2) => freeVarsCons(c1) ++ freeVarsCons(c2)
+        case WeededAst.ConWhiteList(wl) => freeVars(wl)
+        case WeededAst.ConBase(t) => freeVars(t)
+      }
+      freeVarsCons(con) ++ freeVars(chan)
     case WeededAst.Expression.Lazy(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Force(exp, loc) => freeVars(exp)
     case WeededAst.Expression.FixpointConstraintSet(cs, loc) => cs.flatMap(freeVarsConstraint)

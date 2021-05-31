@@ -206,6 +206,14 @@ object Safety extends Phase[Root, Root] {
 
     case Expression.Spawn(exp, tpe, eff, loc) => visitExp(exp)
 
+    case Expression.Con(con, chan, tpe, eff, loc) =>
+      def visitCon(con: ConRule): List[CompilationError] = con match {
+        case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
+        case ConWhiteList(wl) => visitExp(wl)
+        case ConBase(t) => List.empty
+      }
+      visitCon(con) ++ visitExp(chan)
+
     case Expression.Lazy(exp, tpe, loc) => visitExp(exp)
 
     case Expression.Force(exp, tpe, eff, loc) => visitExp(exp)
