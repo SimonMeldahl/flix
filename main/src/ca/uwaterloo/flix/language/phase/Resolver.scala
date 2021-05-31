@@ -846,21 +846,21 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
         case NamedAst.Expression.Con(con, chan, loc) =>
           def visitCon(con: NamedAst.ConRule): Validation[ResolvedAst.ConRule, ResolutionError] = con match {
             case NamedAst.ConArrow(c1, c2) => for {
-              c1 <- visitCon(c1)
-              c2 <- visitCon(c2)
-            } yield ResolvedAst.ConArrow(c1, c2)
+              c1new <- visitCon(c1)
+              c2new <- visitCon(c2)
+            } yield ResolvedAst.ConArrow(c1new, c2new)
             case NamedAst.ConWhiteList(wl) => for {
-              wl <- visit(wl, tenv0)
-            } yield ResolvedAst.ConWhiteList(wl)
+              wlnew <- visit(wl, tenv0)
+            } yield ResolvedAst.ConWhiteList(wlnew)
             case NamedAst.ConBase(t) => for {
-              t <- lookupType(t, ns0, root)
-            } yield ResolvedAst.ConBase(t)
+              tnew <- lookupType(t, ns0, root)
+            } yield ResolvedAst.ConBase(tnew)
           }
 
           for {
-            con <- visitCon(con)
-            chan <- visit(chan, tenv0)
-          } yield ResolvedAst.Expression.Con(con, chan, loc)
+            connew <- visitCon(con)
+            channew <- visit(chan, tenv0)
+          } yield ResolvedAst.Expression.Con(connew, channew, loc)
 
 
         case NamedAst.Expression.Lazy(exp, loc) =>

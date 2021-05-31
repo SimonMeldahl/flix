@@ -196,6 +196,8 @@ object SimplifiedAst {
 
     case class Spawn(exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
+    case class Con(con: SimplifiedAst.ConRule, chan: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
+
     case class Lazy(exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
     case class Force(exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
@@ -207,6 +209,14 @@ object SimplifiedAst {
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: SimplifiedAst.Expression, exp: SimplifiedAst.Expression)
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList(wl: SimplifiedAst.Expression) extends ConRule
+
+  case class ConBase(t: Type) extends ConRule
 
   case class Case(sym: Symbol.EnumSym, tag: Name.Tag, tpeDeprecated: Type, loc: SourceLocation)
 

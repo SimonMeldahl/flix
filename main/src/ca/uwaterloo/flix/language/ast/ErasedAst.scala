@@ -196,6 +196,8 @@ object ErasedAst {
 
     case class Spawn(exp: ErasedAst.Expression[PType], tpe: EType[PReference[PUnit]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PUnit]]
 
+    case class Con[T <: PType](con: ErasedAst.ConRule, chan: ErasedAst.Expression[PReference[PChan[T]]], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
+
     case class Lazy[T <: PType](exp: ErasedAst.Expression[T], tpe: EType[PReference[PLazy[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PLazy[T]]]
 
     case class Force[T <: PType](exp: ErasedAst.Expression[PReference[PLazy[T]]], tpe: EType[T], loc: SourceLocation) extends ErasedAst.Expression[T]
@@ -217,6 +219,14 @@ object ErasedAst {
   }
 
   case class SelectChannelRule[T <: PType](sym: Symbol.VarSym, chan: ErasedAst.Expression[PReference[PChan[PType]]], exp: ErasedAst.Expression[T])
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList[T <: PType](wl: ErasedAst.Expression[T]) extends ConRule
+
+  case class ConBase[T <: PType](t: EType[T]) extends ConRule
 
   sealed trait Predicate {
     def loc: SourceLocation

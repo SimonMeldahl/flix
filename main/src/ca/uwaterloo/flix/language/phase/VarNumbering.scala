@@ -253,6 +253,17 @@ object VarNumbering extends Phase[Root, Root] {
       case Expression.Spawn(exp, tpe, loc) =>
         visitExp(exp, i0)
 
+      case Expression.Con(con, chan, _, _) =>
+        def visitCon(con: ConRule, i0: Int): Int = con match {
+          case ConArrow(c1, c2) =>
+            val i1 = visitCon(c1, i0)
+            visitCon(c2, i1)
+          case ConWhiteList(wl) => visitExp(wl, i0)
+          case ConBase(t) => i0
+        }
+        val i1 = visitCon(con, i0)
+        visitExp(chan, i1)
+
       case Expression.Lazy(exp, tpe, loc) =>
         visitExp(exp, i0)
 

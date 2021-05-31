@@ -367,6 +367,17 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
         val t = visitType(tpe)
         FinalAst.Expression.Spawn(e, t, loc)
 
+      case LiftedAst.Expression.Con(con, chan, tpe, loc) =>
+        def visitCon(con: LiftedAst.ConRule): FinalAst.ConRule = con match {
+          case LiftedAst.ConArrow(c1, c2) => FinalAst.ConArrow(visitCon(c1), visitCon(c2))
+          case LiftedAst.ConWhiteList(wl) => FinalAst.ConWhiteList(visit(wl))
+          case LiftedAst.ConBase(t) => FinalAst.ConBase(visitType(t))
+        }
+        val c = visit(chan)
+        val conVal = visitCon(con)
+        val t = visitType(tpe)
+        FinalAst.Expression.Con(conVal, c, t, loc)
+
       case LiftedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visit(exp)
         val t = visitType(tpe)

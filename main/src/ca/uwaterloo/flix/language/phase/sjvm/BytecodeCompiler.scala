@@ -177,6 +177,7 @@ object BytecodeCompiler {
     case Expression.PutChannel(exp1, exp2, tpe, loc) => ???
     case Expression.SelectChannel(rules, default, tpe, loc) => ???
     case Expression.Spawn(exp, tpe, loc) => ???
+    case Expression.Con(con, chan, tpe, loc) => ???
     case Expression.Lazy(exp, tpe, loc) => ???
     case Expression.Force(exp, tpe, loc) => ???
     case Expression.FixpointConstraintSet(cs, tpe, loc) => ???

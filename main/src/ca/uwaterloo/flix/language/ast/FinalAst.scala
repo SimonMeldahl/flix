@@ -193,6 +193,8 @@ object FinalAst {
 
     case class Spawn(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
+    case class Con(con: FinalAst.ConRule, chan: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+
     case class Lazy(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
     case class Force(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
@@ -205,6 +207,14 @@ object FinalAst {
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: FinalAst.Expression, exp: FinalAst.Expression)
+
+  sealed trait ConRule
+
+  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+
+  case class ConWhiteList(wl: FinalAst.Expression) extends ConRule
+
+  case class ConBase(t: MonoType) extends ConRule
 
   case class Case(sym: Symbol.EnumSym, tag: Name.Tag, tpeDeprecated: MonoType, loc: SourceLocation)
 

@@ -252,6 +252,14 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
     case FinalAst.Expression.Spawn(exp, tpe, loc) =>
       ErasedAst.Expression.Spawn(visitExp(exp), visitTpe(tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
+    case FinalAst.Expression.Con(con, chan, tpe, loc) =>
+      def visitCon(con: FinalAst.ConRule): ErasedAst.ConRule = con match {
+        case FinalAst.ConArrow(c1, c2) => ErasedAst.ConArrow(visitCon(c1), visitCon(c2))
+        case FinalAst.ConWhiteList(wl) => ErasedAst.ConWhiteList(visitExp[PType](wl))
+        case FinalAst.ConBase(t) => ErasedAst.ConBase(visitTpe[PType](t))
+      }
+      ErasedAst.Expression.Con(visitCon(con), visitExp[PReference[PChan[PType]]](chan), visitTpe[PReference[PChan[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
+
     case FinalAst.Expression.Lazy(exp, tpe, loc) =>
       ErasedAst.Expression.Lazy(visitExp(exp), visitTpe[PReference[PLazy[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 

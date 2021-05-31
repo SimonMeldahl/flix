@@ -297,6 +297,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         })
         Value.Unit
 
+      case Expression.Con(con, chan, tpe, loc) =>
+        // TODO(LBS): implement
+        ???
+
       case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
 
       case Expression.MatchError(_, loc) => throw new MatchError(loc.reified)

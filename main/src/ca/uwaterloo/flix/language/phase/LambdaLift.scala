@@ -343,6 +343,16 @@ object LambdaLift extends Phase[SimplifiedAst.Root, LiftedAst.Root] {
         val e = visitExp(exp)
         LiftedAst.Expression.Spawn(e, tpe, loc)
 
+      case SimplifiedAst.Expression.Con(con, chan, tpe, loc) =>
+        def visitCon(con: SimplifiedAst.ConRule): LiftedAst.ConRule = con match {
+          case SimplifiedAst.ConArrow(c1, c2) => LiftedAst.ConArrow(visitCon(c1), visitCon(c2))
+          case SimplifiedAst.ConWhiteList(wl) => LiftedAst.ConWhiteList(visitExp(wl))
+          case SimplifiedAst.ConBase(t) => LiftedAst.ConBase(t)
+        }
+        val c = visitExp(chan)
+        val conVal = visitCon(con)
+        LiftedAst.Expression.Con(conVal, c, tpe, loc)
+
       case SimplifiedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)
         LiftedAst.Expression.Lazy(e, tpe, loc)

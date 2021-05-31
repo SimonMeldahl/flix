@@ -1129,6 +1129,8 @@ object GenExpression {
       visitor.visitMethodInsn(INVOKESTATIC, JvmName.Runtime.Value.Unit.toInternalName, "getInstance",
         AsmOps.getMethodDescriptor(Nil, JvmType.Unit), false)
 
+    case Expression.Con(con, chan, tpe, loc) => throw InternalCompilerException(s"Unexpected expression: $exp0")
+
     case Expression.Lazy(exp, tpe, loc) =>
       // Add source line numbers for debugging.
       addSourceLine(visitor, loc)
