@@ -153,7 +153,6 @@ object Value {
 
 
   sealed trait Channel extends Value {
-    // TODO(LBS): check that we don't increase the policy in reduceK
     // TODO(LBS): delete implicit loc or add prints to --debug
     def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef
 
