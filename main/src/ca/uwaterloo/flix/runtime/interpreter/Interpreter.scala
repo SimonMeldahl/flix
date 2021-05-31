@@ -252,7 +252,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
         val pols = pol map {
           value =>
-            val Value.Arr(elms, _) = cast2array(value)
+            val Value.Arr(elms, _) = cast2array(eval(value, env0, lenv0, root, currentLabel))
             elms.map(cast2str).toList
         }
         Value.ChannelImpl(new JavaChannel(size), pols)

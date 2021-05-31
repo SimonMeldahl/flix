@@ -794,7 +794,7 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
           val polVal = pol match {
             case Some(pol) =>
               for {
-                pol <- visit(exp, tenv0)
+                pol <- visit(pol, tenv0)
               } yield Some(pol)
             case None => None.toSuccess
           }
