@@ -19,6 +19,7 @@ package ca.uwaterloo.flix.language.ast
 import java.lang.reflect.{Constructor, Field, Method}
 
 import ca.uwaterloo.flix.language.ast.Ast.{Denotation, Source}
+import ca.uwaterloo.flix.runtime.interpreter.Value
 
 object FinalAst {
 
@@ -200,10 +201,7 @@ object FinalAst {
 
     case class MatchError(tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
-    type KLabel = List[String]
-
-    case class K(exp: FinalAst.Expression, fromLabel: KLabel, toLabel: KLabel, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
-
+    case class K(exp: FinalAst.Expression, fromLabel: Value.KLabel, toLabel: Value.KLabel, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: FinalAst.Expression, exp: FinalAst.Expression)

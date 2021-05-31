@@ -16,12 +16,11 @@
 
 package ca.uwaterloo.flix.runtime.interpreter
 
-import ca.uwaterloo.flix.runtime.interpreter.{Channel => JavaChannel}
 import ca.uwaterloo.flix.api.Flix
 import ca.uwaterloo.flix.language.ast.FinalAst.{Expression, Root}
-import ca.uwaterloo.flix.language.ast.FinalAst.Expression.KLabel
-import ca.uwaterloo.flix.language.ast.{FinalAst, MonoType, SourceLocation, Symbol}
-import ca.uwaterloo.flix.util.{InternalCompilerException, InternalRuntimeException}
+import ca.uwaterloo.flix.language.ast.{MonoType, SourceLocation, Symbol}
+import ca.uwaterloo.flix.runtime.interpreter.{Channel => JavaChannel}
+import ca.uwaterloo.flix.util.InternalRuntimeException
 
 import java.util.concurrent.locks.{Condition, Lock, ReentrantLock}
 import scala.util.Random
@@ -132,26 +131,56 @@ object Value {
     final override def toString: String = throw InternalRuntimeException(s"Value.Arr does not support `toString`.")
   }
 
+  type KLabel = List[String]
+
+  def kLabelString(kLabel: KLabel): String = {
+    if (kLabel.isEmpty) "<main>"
+    else kLabel.mkString(".")
+  }
+
+  type Policy = Option[List[KLabel]]
+
+  private def polsString(pols: List[KLabel]): String =
+    pols.map(kLabelString).mkString("{", ",", "}")
+
+  private def polsString(pols: Policy): String =
+    pols.map(polsString).getOrElse("{T}")
+
+  private def polsContains(pols: Policy, currentLabel: KLabel): Boolean = pols match {
+    case Some(value) => value.contains(currentLabel)
+    case None => true
+  }
+
+
   sealed trait Channel extends Value {
-    def get()(implicit loc: SourceLocation): AnyRef
-    def put(e: AnyRef)(implicit loc: SourceLocation): Channel
+    // TODO(LBS): check that we don't increase the policy in reduceK
+    // TODO(LBS): delete implicit loc or add prints to --debug
+    def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef
+
+    def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef
+
+    def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel
+
+    def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit
+
+    def pols: Policy
   }
 
   object Channel {
-    def select(selectObjects: List[AnyRef], hasDefault: Boolean, loc: SourceLocation): SelectChoice = {
+    def select(selectObjects: List[AnyRef], hasDefault: Boolean, currentLabel: KLabel)(implicit loc: SourceLocation): SelectChoice = {
       // Create new Condition and channelLock the current thread
       val selectLock: Lock = new ReentrantLock()
       val condition: Condition = selectLock.newCondition()
-      val channels: List[JavaChannel] = selectObjects.map{
+      val javaChannels: List[JavaChannel] = selectObjects.map {
         case Value.ChannelImpl(c, _) => c
         case g: Value.Guard => g.getChannel.c
         case ref => throw InternalRuntimeException(s"Unexpected non-channel or non-guard value: ${ref.getClass.getName}.")
       }
       // Sort channels to avoid deadlock when locking
-      val sortedChannels: List[JavaChannel] = JavaChannel.sortChannels(channels.toArray).toList
+      val sortedJavaChannels: List[JavaChannel] = JavaChannel.sortChannels(javaChannels.toArray).toList
       while (!Thread.interrupted()) {
         // Lock all channels in sorted order
-        JavaChannel.lockAllChannels(sortedChannels.toArray)
+        JavaChannel.lockAllChannels(sortedJavaChannels.toArray)
         try {
           // Lock the select lock after the channels
           selectLock.lock()
@@ -169,13 +198,8 @@ object Value {
               // Find channels with waiting elements
               for (channelIndexPair <- channelIndexPairs) {
                 val element = channelIndexPair match {
-                  case (c: ChannelImpl, _) =>
-                    println(s"tryGet channel with no guard @$loc")
-                    c.c.tryGet()
-                  //TODO(LBS) check if we are allowed to try and get from the channel if there is a guard
-                  case (g: Guard, _) =>
-                    println(s"tryGet channel with guard ${g.toString} @$loc")
-                    g.getChannel.c.tryGet()
+                  case (c: Channel, _) =>
+                    c.tryGet(currentLabel)
                 }
 
                 if (element != null) {
@@ -196,14 +220,17 @@ object Value {
             // Add our condition to all channels to get notified when a new element is added
             for (channel <- selectObjects) {
               channel match {
-                case (c: ChannelImpl, _) => c.c.addGetter(selectLock, condition)
-                //TODO(LBS) check if we are allowed to add getter notification to the channel if there is a guard
-                case (g: Guard, _) => g.getChannel.c.addGetter(selectLock, condition)
+                case (c: ChannelImpl, _) =>
+                  c.checkAccess(currentLabel)
+                  c.c.addGetter(selectLock, condition)
+                case (g: Guard, _) =>
+                  g.checkAccess(currentLabel)
+                  g.getChannel.c.addGetter(selectLock, condition)
               }
             }
           } finally {
             // Unlock all channels in sorted order, so other threads may input elements
-            JavaChannel.unlockAllChannels(sortedChannels.toArray)
+            JavaChannel.unlockAllChannels(sortedJavaChannels.toArray)
           }
 
           // Wait for an element to be added to any of the channels
@@ -219,23 +246,34 @@ object Value {
         }
       }
 
-      throw new RuntimeException("Thread interrupted");
+      throw new RuntimeException("Thread interrupted")
     }
   }
 
-  case class ChannelImpl(c: JavaChannel, pols: Option[List[String]]) extends Channel {
-    def get()(implicit loc: SourceLocation): AnyRef = {
-      println(s"get channel with no guard @$loc")
+  case class ChannelImpl(c: JavaChannel, pols: Policy) extends Channel {
+    override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      checkAccess(currentLabel)
+      println(s"get channel with no guard ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       c.get()
     }
-    def put(e: AnyRef)(implicit loc: SourceLocation): Channel = {
-      println(s"put channel with no guard @$loc")
+
+    override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      checkAccess(currentLabel)
+      println(s"tryget channel with no guard ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
+      c.tryGet()
+    }
+
+    override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = {
+      checkAccess(currentLabel)
+      println(s"put channel with no guard ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       c.put(e)
       this
     }
+
+    override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = ()
   }
 
-  case class Guard(lit: Channel, from: List[String], to: List[String]) extends Channel {
+  case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy) extends Channel {
     def getChannel: ChannelImpl = lit match {
       case c: ChannelImpl => c
       case g: Guard => g.getChannel
@@ -247,18 +285,39 @@ object Value {
     }
 
     override def toString: String = {
-      getAllLabels.map(l => s"${l._1} <- ${l._2}").mkString("[", ", ", "]")
+      getAllLabels.map(l => s"${kLabelString(l._1)} <- ${kLabelString(l._2)}").mkString("[", ", ", "]")
     }
 
-    override def get()(implicit loc: SourceLocation): AnyRef = {
-      println(s"get channel with guard ${toString} @$loc")
+    override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      checkAccess(currentLabel)
+      println(s"get channel with guard $toString ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       getChannel.c.get()
     }
 
-    override def put(e: AnyRef)(implicit loc: SourceLocation): Channel = {
-      println(s"put channel with guard ${toString} @$loc")
+    override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      checkAccess(currentLabel)
+      println(s"tryget channel with guard $toString ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
+      getChannel.c.tryGet()
+    }
+
+    override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = {
+      checkAccess(currentLabel)
+      println(s"put channel with guard $toString ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       getChannel.c.put(e)
       this
+    }
+
+    override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = {
+      def error(p: Policy, blamee: KLabel) = throw InternalRuntimeException(s"${kLabelString(currentLabel)} was not in policy list ${polsString(p)} BLAME ${kLabelString(blamee)} @$loc")
+
+      if (!polsContains(pols, currentLabel)) error(pols, to)
+      lit match {
+        case ChannelImpl(_, p@Some(_)) =>
+          if (!polsContains(p, currentLabel))
+            error(p, from)
+        case ChannelImpl(_, None) => ()
+        case l: Guard => l.checkAccess(currentLabel)
+      }
     }
   }
 }

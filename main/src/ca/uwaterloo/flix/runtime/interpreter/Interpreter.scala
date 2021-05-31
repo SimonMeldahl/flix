@@ -18,10 +18,10 @@ package ca.uwaterloo.flix.runtime.interpreter
 
 import ca.uwaterloo.flix.api._
 import ca.uwaterloo.flix.language.CompilationError
-import ca.uwaterloo.flix.language.ast.FinalAst.Expression.KLabel
 import ca.uwaterloo.flix.language.ast.FinalAst._
 import ca.uwaterloo.flix.language.ast._
 import ca.uwaterloo.flix.language.phase.Phase
+import ca.uwaterloo.flix.runtime.interpreter.Value.KLabel
 import ca.uwaterloo.flix.runtime.interpreter.{Channel => JavaChannel}
 import ca.uwaterloo.flix.util.Validation._
 import ca.uwaterloo.flix.util.vt.VirtualTerminal
@@ -250,23 +250,22 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
       case Expression.NewChannel(exp, pol, tpe, loc) =>
         val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
-        val pols = pol map {
-          value =>
-            val Value.Arr(elms, _) = cast2array(eval(value, env0, lenv0, root, currentLabel))
-            elms.map(cast2str).toList
+        val pols = pol map { value =>
+          val Value.Arr(elms, _) = cast2array(eval(value, env0, lenv0, root, currentLabel))
+          elms.map(cast2str(_).split("\\.").toList).toList
         }
         Value.ChannelImpl(new JavaChannel(size), pols)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
-        c.get()
+        c.get(currentLabel)
 
       case Expression.PutChannel(exp1, exp2, tpe, loc) =>
         val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
         val e2 = eval(exp2, env0, lenv0, root, currentLabel)
-        c.put(e2)
+        c.put(e2, currentLabel)
 
-      case Expression.SelectChannel(rules, default, tpe, loc) =>
+      case Expression.SelectChannel(rules, default, _, _) =>
         // Evaluate all Channel expressions
         val rs = rules.map { r =>
           (r.sym, eval(r.chan, env0, lenv0, root, currentLabel), r.exp)
@@ -276,7 +275,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         // Check if there is a default case
         val hasDefault = default.isDefined
         // Call select which returns a selectChoice with the given branchNumber
-        val selectChoice = Value.Channel.select(channelsArray, hasDefault, loc)
+        val selectChoice = Value.Channel.select(channelsArray, hasDefault, currentLabel)
 
         // Check if the default case was selected
         if (selectChoice.defaultChoice) {
@@ -657,7 +656,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     val hasLabelChanged = fromLabel != toLabel
 
     // Evaluate the arguments.
-    val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a => if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a) else a)
+    val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a =>
+      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a) else a)
 
     // Construct the new environment by pairing the formal parameters with the actual arguments.
     val env = defn.formals.zip(as).foldLeft(Map.empty[String, AnyRef]) {
@@ -669,8 +669,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   }
 
   def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = value match {
-    case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Arr => value
-    case c: Value.Channel => Value.Guard(c, fromLabel, toLabel)
+    case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Str | _: Value.Arr => value
+    case c: Value.Channel => Value.Guard(c, fromLabel, toLabel, c.pols) // TODO(LBS): policy from K contract
     case _: Value.Closure | _: Value.Lambda => Value.Lambda(value, fromLabel, toLabel)
   }
 

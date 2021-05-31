@@ -1,4 +1,5 @@
 namespace ThirdPartyProducerA {
+    pub def name(): String & Pure = "ThirdPartyProducerA"
     pub def produce(consumer: Int -> _ & Impure): Unit & Impure = 
         /// ...
         consumer(1); 
@@ -7,6 +8,7 @@ namespace ThirdPartyProducerA {
 }
 
 namespace ThirdPartyProducerB {
+    pub def name(): String & Pure = "ThirdPartyProducerB"
     pub def produce(consumer: Int -> _ & Impure): Unit & Impure = 
         /// ...
         consumer(2); 
@@ -15,6 +17,7 @@ namespace ThirdPartyProducerB {
 }
 
 namespace ChannelLibrary {
+    pub def name(): String & Pure = "ChannelLibrary"
     pub def receive(c: Channel[Int]): Unit & Impure = 
         select {
             case x <- c => x |> println; receive(c)
@@ -26,8 +29,10 @@ namespace ChannelLibrary {
 }
 
 namespace OurCode {
+    pub def name(): String & Pure = "OurCode"
     pub def main(): Int & Impure =
-        let c = chan Int 100;
+        let whitelist = [ChannelLibrary.name(), OurCode.name()];
+        let c = chan Int 100 (whitelist);
         let f = x -> {(c <- x); ()};
         /// for access control we have to "trust" ourselves to not make this mistake
         /// let f = x -> (c <- x);
