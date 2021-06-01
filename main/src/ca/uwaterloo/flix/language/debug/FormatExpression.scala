@@ -1,6 +1,6 @@
 package ca.uwaterloo.flix.language.debug
 
-import ca.uwaterloo.flix.language.ast.TypedAst
+import ca.uwaterloo.flix.language.ast.{FinalAst, TypedAst}
 
 /**
   * Formatting of expressions.
@@ -47,10 +47,10 @@ object FormatExpression {
     case TypedAst.Expression.RecordRestrict(field, rest, tpe, eff, loc) => s"RecordRestrict($field, $rest)"
     case TypedAst.Expression.ArrayLit(elms, tpe, eff, loc) => s"ArrayLit(${elms.mkString(", ")})"
     case TypedAst.Expression.ArrayNew(elm, len, tpe, eff, loc) => s"ArrayNew($elm, $len)"
-    case TypedAst.Expression.ArrayLoad(base, index, tpe, eff, loc) => s"ArrayLoad($base, $index)"
-    case TypedAst.Expression.ArrayLength(base, eff, loc) => s"ArrayLength($base)"
-    case TypedAst.Expression.ArrayStore(base, index, elm, loc) => s"ArrayStore($base, $index, $elm)"
-    case TypedAst.Expression.ArraySlice(base, begin, end, tpe, loc) => s"ArraySlice($base, $begin, $end)"
+    case TypedAst.Expression.ArrayLoad(base, index, tpe, eff, loc) => s"ArrayLoad(${format(base)}, $index)"
+    case TypedAst.Expression.ArrayLength(base, eff, loc) => s"ArrayLength(${format(base)})"
+    case TypedAst.Expression.ArrayStore(base, index, elm, loc) => s"ArrayStore(${format(base)}, $index, $elm)"
+    case TypedAst.Expression.ArraySlice(base, begin, end, tpe, loc) => s"ArraySlice(${format(base)}, $begin, $end)"
     case TypedAst.Expression.Ref(exp, tpe, eff, loc) => s"Ref($exp)"
     case TypedAst.Expression.Deref(exp, tpe, eff, loc) => s"Deref($exp)"
     case TypedAst.Expression.Assign(exp1, exp2, tpe, eff, loc) => s"Assign($exp1, $exp2)"
@@ -88,4 +88,85 @@ object FormatExpression {
     case TypedAst.Expression.FixpointProjectOut(pred, exp, tpe, eff, loc) => s"FixpointProjectOut($pred, $exp)"
   }
 
+  def format(e0: FinalAst.Expression): String = e0 match {
+    case FinalAst.Expression.Unit(_) => "()"
+    case FinalAst.Expression.Null(_, _) => "null"
+    case FinalAst.Expression.True(_) => "true"
+    case FinalAst.Expression.False(_) => "false"
+    case FinalAst.Expression.Char(lit, _) => "'" + lit + "'"
+    case FinalAst.Expression.Float32(lit, _) => s"${lit}f32"
+    case FinalAst.Expression.Float64(lit, _) => s"${lit}f64"
+    case FinalAst.Expression.Int8(lit, _) => s"${lit}i8"
+    case FinalAst.Expression.Int16(lit, _) => s"${lit}i16"
+    case FinalAst.Expression.Int32(lit, _) => s"${lit}i32"
+    case FinalAst.Expression.Int64(lit, _) => s"${lit}i64"
+    case FinalAst.Expression.BigInt(lit, _) => s"${lit}i64"
+    case FinalAst.Expression.Str(lit, _) => "\"" + lit + "\""
+    case FinalAst.Expression.Var(sym, _, _) => s"Sym(${sym.toString})"
+    case FinalAst.Expression.Unary(sop, exp, tpe, eff, loc) => s"Unary($sop, $exp)"
+    case FinalAst.Expression.Binary(sop, op, exp1, exp2, tpe, loc) => s"Binary($sop, ${format(exp1)}, ${format(exp2)})"
+    case FinalAst.Expression.Let(sym, exp1, exp2, tpe, loc) => s"Let(${sym.toString}, ${format(exp1)}, ${format(exp2)})"
+    case FinalAst.Expression.IfThenElse(exp1, exp2, exp3, tpe, loc) => s"IfThenElse(${format(exp1)}, ${format(exp2)}, ${format(exp3)})"
+    case FinalAst.Expression.Tag(sym, tag, exp, tpe, loc) => s"Tag(${sym.toString}, $tag, ${format(exp)})"
+    case FinalAst.Expression.Tuple(elms, tpe, loc) => s"Tuple(${elms.mkString(", ")})"
+    case FinalAst.Expression.RecordEmpty(tpe, loc) => s"RecordEmpty"
+    case FinalAst.Expression.RecordSelect(exp, field, tpe, loc) => s"RecordSelect(${format(exp)}, $field)"
+    case FinalAst.Expression.RecordExtend(field, value, rest, tpe, loc) => s"RecordExtend($field, $value, $rest)"
+    case FinalAst.Expression.RecordRestrict(field, rest, tpe, loc) => s"RecordRestrict($field, $rest)"
+    case FinalAst.Expression.ArrayLit(elms, tpe, loc) => s"ArrayLit(${elms.mkString(", ")})"
+    case FinalAst.Expression.ArrayNew(elm, len, tpe, loc) => s"ArrayNew($elm, $len)"
+    case FinalAst.Expression.ArrayLoad(base, index, tpe, loc) => s"ArrayLoad(${format(base)}, $index)"
+    case FinalAst.Expression.ArrayLength(base, tpe, loc) => s"ArrayLength(${format(base)})"
+    case FinalAst.Expression.ArrayStore(base, index, elm, tpe, loc) => s"ArrayStore(${format(base)}, $index, $elm)"
+    case FinalAst.Expression.ArraySlice(base, begin, end, tpe, loc) => s"ArraySlice(${format(base)}, $begin, $end)"
+    case FinalAst.Expression.Ref(exp, tpe, loc) => s"Ref(${format(exp)})"
+    case FinalAst.Expression.Deref(exp, tpe, loc) => s"Deref(${format(exp)})"
+    case FinalAst.Expression.Assign(exp1, exp2, tpe, loc) => s"Assign(${format(exp1)}, ${format(exp2)})"
+    case FinalAst.Expression.Existential(fparam, exp, loc) => s"Existential($fparam, ${format(exp)})"
+    case FinalAst.Expression.Universal(fparam, exp, loc) => s"Universal($fparam, ${format(exp)})"
+    case FinalAst.Expression.Cast(exp, tpe, loc) => s"Cast(${format(exp)}, $tpe)"
+    case FinalAst.Expression.TryCatch(exp, rules, tpe, loc) => s"TryCatch(${format(exp)}, ${rules.mkString(", ")})"
+    case FinalAst.Expression.InvokeConstructor(constructor, args, tpe, loc) => s"InvokeConstructor($constructor, ${args.mkString(", ")})"
+    case FinalAst.Expression.InvokeMethod(method, exp, args, tpe, loc) => s"InvokeMethod($method, ${format(exp)}, ${args.mkString(", ")})"
+    case FinalAst.Expression.InvokeStaticMethod(method, args, tpe, loc) => s"InvokeStaticMethod($method, ${args.mkString(", ")})"
+    case FinalAst.Expression.GetField(field, exp, tpe, loc) => s"GetField($field, ${format(exp)})"
+    case FinalAst.Expression.PutField(field, exp1, exp2, tpe, loc) => s"PutField($field, ${format(exp1)}, ${format(exp2)})"
+    case FinalAst.Expression.GetStaticField(field, tpe, loc) => s"GetStaticField($field)"
+    case FinalAst.Expression.PutStaticField(field, exp, tpe, loc) => s"PutStaticField($field, ${format(exp)})"
+    case FinalAst.Expression.NewChannel(exp, pol, tpe, loc) => s"NewChannel(${format(exp)}, $pol)"
+    case FinalAst.Expression.GetChannel(exp, tpe, loc) => s"GetChannel(${format(exp)})"
+    case FinalAst.Expression.PutChannel(exp1, exp2, tpe, loc) => s"PutChannel(${format(exp1)}, ${format(exp2)})"
+    case FinalAst.Expression.SelectChannel(rules, default, tpe, loc) => s"SelectChannel(${rules.mkString(", ")}, $default)"
+    case FinalAst.Expression.Spawn(exp, tpe, loc) => s"Spawn(${format(exp)})"
+    case FinalAst.Expression.Con(con, fun, tpe, loc) =>
+      def visitCon(con: FinalAst.ConRule): String = con match {
+        case FinalAst.ConArrow(c1, c2) => s"ConArrow(${visitCon(c1)}, ${visitCon(c2)})"
+        case FinalAst.ConWhiteList(wl) => s"ConWhiteList(${format(wl)})"
+        case FinalAst.ConBase(t) => s"ConBase($t)"
+      }
+      s"Con(${visitCon(con)}, ${format(fun)})"
+    case FinalAst.Expression.Lazy(exp, tpe, loc) => s"Lazy(${format(exp)})"
+    case FinalAst.Expression.Force(exp, tpe, loc) => s"Force(${format(exp)})"
+    case FinalAst.Expression.ApplyClo(exp, args, tpe, loc) => s"ApplyClo(${format(exp)}, args: ${args.map(format).mkString(", ")})"
+    case FinalAst.Expression.ApplyDef(sym, args, tpe, loc) => s"ApplyDef(${sym.toString}, args: ${args.map(format).mkString(", ")})"
+    case FinalAst.Expression.ApplySelfTail(sym, formals, actuals, tpe, loc) => s"ApplySelfTail(${sym.toString}, actuals: ${actuals.map(format).mkString(", ")}))"
+    case FinalAst.Expression.Branch(exp, branches, tpe, loc) => s"Branch(${format(exp)} ...?)"
+    case FinalAst.Expression.Closure(sym, freeVars, fnMonoType, tpe, loc) => s"Closure(${sym.toString} ...)"
+    case FinalAst.Expression.HoleError(sym, tpe, loc) =>s"HoleError(${sym.toString})"
+    case FinalAst.Expression.Index(base, offset, tpe, loc) => s"Index(${format(base)}, $offset)"
+    case FinalAst.Expression.Is(sym, tag, exp, loc) => s"Is(${sym.toString})"
+    case FinalAst.Expression.JumpTo(sym, tpe, loc) => s"JumpTo(${sym.toString})"
+    case FinalAst.Expression.K(exp, fromLabel, toLabel, con, tpe, loc) =>
+      import ca.uwaterloo.flix.runtime.interpreter.Value
+      def visitCon(con: Value.Con): String = con match {
+        case Value.ConArrow(c1, c2) => s"ConArrow(${visitCon(c1)}, ${visitCon(c2)})"
+        case Value.ConWhiteList(wl) => s"ConWhiteList(${Value.polsString(wl)})"
+        case Value.ConBase(t) => s"ConBase($t)"
+      }
+      s"K(${format(exp)}, ${Value.kLabelString(fromLabel)}, ${Value.kLabelString(toLabel)}, ${visitCon(con)})"
+    case FinalAst.Expression.MatchError(tpe, loc) => s"MatchError($tpe)"
+    case FinalAst.Expression.Untag(sym, tag, exp, tpe, loc) => s"Untag(${sym.toString}, ${format(exp)})"
+    case FinalAst.Expression.ApplyCloTail(exp, args, tpe, loc) => s"ApplyCloTail(${format(exp)}, args: ${args.map(format).mkString(", ")})"
+    case FinalAst.Expression.ApplyDefTail(sym, args, tpe, loc) => s"ApplyDefTail(${sym.toString}, args: ${args.map(format).mkString(", ")})"
+  }
 }

@@ -1,11 +1,14 @@
 namespace A {
-    pub def f(c: Channel[Int]): Unit & Impure = c <- 0; ()
+    pub def f(c: Channel[Int]): Unit & Impure = c <- 0; c <- 0; B.f(c)
+}
+
+namespace B {
+    pub def f(c: Channel[Int]): Unit & Impure = <- c; ()
 }
 
 def main(_args: Array[String]): Int & Impure =
-    let c = chan Int 100 ([]);
-    let cc = con(Int -> ["A"], c);
-    let g = () -> cc;
-    A.f(g());
+    let c = chan Int 100 restricted ["B", "A"];
+    let g = () -> c;
+    con(["?"] -> Unit, A.f(g()));
     <- c
 

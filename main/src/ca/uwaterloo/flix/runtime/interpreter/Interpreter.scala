@@ -33,6 +33,7 @@ import java.math.BigInteger
 object Interpreter extends Phase[Root, Array[String] => Int] {
 
   def run(root: Root)(implicit flix: Flix): Validation[(Array[String]) => Int, CompilationError] = flix.phase("Interpreter") {
+    if (flix.options.debug) root.defs.foreach{case (sym, defn) => println(defn.exp,"\n\n")}
     val r = root.defs.get(Symbol.Main) map {
       case defn =>
         if (defn.formals.length != 1) {
@@ -78,15 +79,15 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         val clo = eval(exp, env0, lenv0, root, currentLabel)
         invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-      case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
+      case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel, Value.ConWhiteList(None))
 
       case Expression.ApplyCloTail(exp, args, _, _) =>
         val clo = eval(exp, env0, lenv0, root, currentLabel)
         invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-      case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
+      case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel, Value.ConWhiteList(None))
 
-      case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
+      case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel, Value.ConWhiteList(None))
 
       case Expression.Unary(sop, op, exp, _, _) =>
         evalUnary(sop, exp, env0, lenv0, root, currentLabel)
@@ -309,11 +310,23 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         }
 
         val contract = visitCon(con)
-        eval(fun, env0, lenv0, root, currentLabel) match {
-          case v@Value.Closure(sym, _) =>
-            if (sym.namespace == currentLabel) throw InternalRuntimeException(s"Cannot contract local functions @$loc")
-            reduceK(currentLabel, sym.namespace, v, contract)
-          case _ => throw InternalRuntimeException(s"Can only have contract on named defs @$loc")
+        // version 1
+//        eval(fun, env0, lenv0, root, currentLabel) match {
+//          case v@Value.Closure(sym, _) =>
+//            // TODO(LBS): should be checked?
+//            //  if (sym.namespace == currentLabel) throw InternalRuntimeException(s"Cannot contract local functions ${v.sym} @$loc")
+//            reduceK(currentLabel, sym.namespace, v, contract)
+//          case _ => throw InternalRuntimeException(s"Can only have contract on functions @$loc")
+//        }
+        // version 2
+        fun match {
+          case Expression.ApplyDefTail(sym, args, tpe, loc) =>
+            invokeDef(sym, args, env0, lenv0, root, currentLabel, contract)
+          case Expression.ApplyDef(sym, args, tpe, loc) =>
+            invokeDef(sym, args, env0, lenv0, root, currentLabel, contract)
+          case Expression.ApplySelfTail(sym, formals, actuals, tpe, loc) =>
+            invokeDef(sym, actuals, env0, lenv0, root, currentLabel, contract)
+          case _ => throw InternalRuntimeException(s"Can only have contract on applications on other namespace functions @$loc")
         }
 
       case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
@@ -666,7 +679,12 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Invokes the given definition `sym` with the given arguments `args` under the given environment `env0`.
     */
-  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix, loc: SourceLocation): AnyRef = {
+  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel, con: Value.Con)(implicit flix: Flix, loc: SourceLocation): AnyRef = {
+    val (c1, c2) = con match {
+      case Value.ConArrow(c1, c2) => (c1, c2)
+      case Value.ConWhiteList(None) => (Value.ConWhiteList(None), Value.ConWhiteList(None))
+      case _ => throw InternalRuntimeException(s"Wrong types on contract $con @$loc")
+    }
     // Lookup the definition.
     val defn = root.defs(sym)
 
@@ -676,7 +694,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     // Evaluate the arguments.
     val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a =>
-      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, Value.ConWhiteList(None)) else a)
+      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, c1) else a)
 
     // Construct the new environment by pairing the formal parameters with the actual arguments.
     val env = defn.formals.zip(as).foldLeft(Map.empty[String, AnyRef]) {
@@ -684,7 +702,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     }
 
     // Evaluate the body expression under the new local variable environment and an empty label environment.
-    reduceK(fromLabel = fromLabel, toLabel = toLabel, eval(defn.exp, env, Map.empty, root, fromLabel), Value.ConWhiteList(None))
+    val finalValue = eval(defn.exp, env, Map.empty, root, fromLabel)
+    if (hasLabelChanged)
+      reduceK(fromLabel = fromLabel, toLabel = toLabel, finalValue, c2)
+    else finalValue
   }
 
   // Check type of contracts at runtime here
@@ -700,7 +721,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
     case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
-    case _ => throw InternalRuntimeException(s"Wrong types on contract @$loc")
+    case _ => throw InternalRuntimeException(s"Wrong types on contract ${con} @$loc")
   }
 
   /**

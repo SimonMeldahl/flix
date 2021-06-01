@@ -145,10 +145,10 @@ object Value {
 
   type Policy = Option[List[KLabel]]
 
-  private def polsString(pols: List[KLabel]): String =
+  def polsString(pols: List[KLabel]): String =
     pols.map(kLabelString).mkString("{", ",", "}")
 
-  private def polsString(pols: Policy): String =
+  def polsString(pols: Policy): String =
     pols.map(polsString).getOrElse("{T}")
 
   private def polsContains(pols: Policy, currentLabel: KLabel): Boolean = pols match {

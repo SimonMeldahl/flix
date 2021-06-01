@@ -796,7 +796,7 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def NewChannel: Rule1[ParsedAst.Expression.NewChannel] = rule {
-      SP ~ keyword("chan") ~ WS ~ Type ~ WS ~ Expression ~ optional(WS ~ "(" ~ optWS ~ Expression ~ optWS ~ ")") ~ SP ~> ParsedAst.Expression.NewChannel
+      SP ~ keyword("chan") ~ WS ~ Type ~ WS ~ Expression ~ optional(WS ~ keyword("restricted") ~ WS ~ Expression ~ optWS) ~ SP ~> ParsedAst.Expression.NewChannel
     }
 
     def GetChannel: Rule1[ParsedAst.Expression.GetChannel] = rule {
