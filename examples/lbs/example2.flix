@@ -11,4 +11,3 @@ def main(_args: Array[String]): Int & Impure =
     let g = () -> c;
     con(["?"] -> Unit, A.f(g()));
     <- c
-

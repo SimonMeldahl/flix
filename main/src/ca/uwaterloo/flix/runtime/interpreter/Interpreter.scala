@@ -258,8 +258,13 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         Value.ChannelImpl(new JavaChannel(size), pols)
 
       case Expression.GetChannel(exp, tpe, loc) =>
+        def reapply(c: Value.Channel, e: AnyRef): AnyRef = c match {
+          case Value.ChannelImpl(c, pols) => e
+          case Value.Guard(lit, from, to, pols) =>
+            reduceK(from, to, reapply(lit, e), Value.ConWhiteList(None))
+        }
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
-        c.get(currentLabel)
+        reapply(c, c.get(currentLabel))
 
       case Expression.PutChannel(exp1, exp2, tpe, loc) =>
         val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
@@ -721,7 +726,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
     case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
-    case _ => throw InternalRuntimeException(s"Wrong types on contract ${con} @$loc")
+    case _ => throw InternalRuntimeException(s"Wrong types on contract $con @$loc")
   }
 
   /**
