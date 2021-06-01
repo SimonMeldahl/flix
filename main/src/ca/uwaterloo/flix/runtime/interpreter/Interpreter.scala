@@ -297,16 +297,24 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         })
         Value.Unit
 
-      case Expression.Con(con, chan, _, loc) =>
-        def visitCon(con: ConRule): Value.ConValue = con match {
+      case Expression.Con(con, fun, _, loc) =>
+        def visitCon(con: ConRule): Value.Con = con match {
           case ConArrow(c1, c2) => Value.ConArrow(visitCon(c1), visitCon(c2))
           case ConWhiteList(wl) =>
             val whiteList = cast2array(eval(wl, env0, lenv0, root, currentLabel)).elms.map(cast2str(_).split('.').toList).toList
+            // ["?"] matches the whitelist
             if (whiteList == List(List("?"))) Value.ConWhiteList(None)
             else Value.ConWhiteList(Some(whiteList))
           case ConBase(t) => Value.ConBase(t)
         }
-        Value.Con(visitCon(con), cast2channel(eval(chan, env0, lenv0, root, currentLabel)))
+
+        val contract = visitCon(con)
+        eval(fun, env0, lenv0, root, currentLabel) match {
+          case v@Value.Closure(sym, _) =>
+            if (sym.namespace == currentLabel) throw InternalRuntimeException(s"Cannot contract local functions @$loc")
+            reduceK(currentLabel, sym.namespace, v, contract)
+          case _ => throw InternalRuntimeException(s"Can only have contract on named defs @$loc")
+        }
 
       case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
 
@@ -327,7 +335,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
       case Expression.Null(_, _) => ???
 
-      case Expression.K(exp, from, to, tpe, loc) => reduceK(from, to, eval(exp, env0, lenv0, root, from))
+      case Expression.K(exp, from, to, con, tpe, loc) => reduceK(from, to, eval(exp, env0, lenv0, root, from), con)
     }
   }
 
@@ -658,7 +666,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Invokes the given definition `sym` with the given arguments `args` under the given environment `env0`.
     */
-  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix): AnyRef = {
+  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix, loc: SourceLocation): AnyRef = {
     // Lookup the definition.
     val defn = root.defs(sym)
 
@@ -668,7 +676,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     // Evaluate the arguments.
     val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a =>
-      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a) else a)
+      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, Value.ConWhiteList(None)) else a)
 
     // Construct the new environment by pairing the formal parameters with the actual arguments.
     val env = defn.formals.zip(as).foldLeft(Map.empty[String, AnyRef]) {
@@ -676,18 +684,23 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     }
 
     // Evaluate the body expression under the new local variable environment and an empty label environment.
-    reduceK(fromLabel = fromLabel, toLabel = toLabel, eval(defn.exp, env, Map.empty, root, fromLabel))
+    reduceK(fromLabel = fromLabel, toLabel = toLabel, eval(defn.exp, env, Map.empty, root, fromLabel), Value.ConWhiteList(None))
   }
 
-  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = value match {
-    case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Str | _: Value.Arr => value
-    case Value.Con(con, c) => con match {
-      case Value.ConArrow(c1, c2) => ???
-      case Value.ConWhiteList(wl) => Value.Guard(c, fromLabel, toLabel, wl)
-      case Value.ConBase(t) => t
-    }
-    case c: Value.Channel => Value.Guard(c, fromLabel, toLabel, c.pols) // TODO(LBS): policy from K contract
-    case _: Value.Closure | _: Value.Lambda => Value.Lambda(value, fromLabel, toLabel)
+  // Check type of contracts at runtime here
+  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef, con: Value.Con)(implicit loc: SourceLocation): AnyRef = (value, con) match {
+    // If wl=None then it was ["?"] and we should match it to the channels policy
+    case (Value.True | Value.False, Value.ConBase(MonoType.Bool) | Value.ConWhiteList(None)) => value
+    case (Value.Unit, Value.ConBase(MonoType.Unit) | Value.ConWhiteList(None)) => value
+    case (Value.Int32(_), Value.ConBase(MonoType.Int32) | Value.ConWhiteList(None)) => value
+    case (Value.Str(_), Value.ConBase(MonoType.Str) | Value.ConWhiteList(None)) => value
+    case (Value.Arr(_, t1), Value.ConBase(t2)) if t1 == t2 => value
+    case (_: Value.Arr, Value.ConWhiteList(None)) => value
+    case (c: Value.Channel, Value.ConWhiteList(wl@Some(_))) => Value.Guard(c, fromLabel, toLabel, wl)
+    case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
+    case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
+    case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
+    case _ => throw InternalRuntimeException(s"Wrong types on contract @$loc")
   }
 
   /**

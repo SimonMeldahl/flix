@@ -3,9 +3,6 @@ namespace A {
 }
 
 def main(_args: Array[String]): Int & Impure =
-    let c = chan Int 100 ([]);
-    let cc = con(Int -> ["A"], c);
-    let g = () -> cc;
-    A.f(g());
-    <- c
+    let _x = A.f;
+    0 as & Impure
 

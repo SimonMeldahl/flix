@@ -193,7 +193,7 @@ object FinalAst {
 
     case class Spawn(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
-    case class Con(con: FinalAst.ConRule, chan: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+    case class Con(con: FinalAst.ConRule, fun: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
     case class Lazy(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
@@ -203,7 +203,7 @@ object FinalAst {
 
     case class MatchError(tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
-    case class K(exp: FinalAst.Expression, fromLabel: Value.KLabel, toLabel: Value.KLabel, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+    case class K(exp: FinalAst.Expression, fromLabel: Value.KLabel, toLabel: Value.KLabel, con: Value.Con, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: FinalAst.Expression, exp: FinalAst.Expression)

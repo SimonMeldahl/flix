@@ -53,13 +53,13 @@ object Value {
 
   case class Str(lit: java.lang.String) extends Value
 
-  case class Lambda(closure: AnyRef, fromLabel: KLabel, toLabel: KLabel) extends Value {
+  case class Lambda(closure: AnyRef, con1: Con, con2: Con, fromLabel: KLabel, toLabel: KLabel)(implicit loc: SourceLocation) extends Value {
     def call(args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
-      val kargs = args.map(e => Expression.K(e, fromLabel = toLabel, toLabel = fromLabel, e.tpe, e.loc))
+      val kargs = args.map(e => Expression.K(e, fromLabel = toLabel, toLabel = fromLabel, con1, e.tpe, e.loc))
       closure match {
         case c: Closure =>
-          Interpreter.reduceK(fromLabel, toLabel, Interpreter.invokeClo(c, kargs, env0, lenv0, root, fromLabel))
-        case l: Lambda => Interpreter.reduceK(fromLabel, toLabel, l.call(kargs, env0, lenv0, root))
+          Interpreter.reduceK(fromLabel, toLabel, Interpreter.invokeClo(c, kargs, env0, lenv0, root, fromLabel), con2)
+        case l: Lambda => Interpreter.reduceK(fromLabel, toLabel, l.call(kargs, env0, lenv0, root), con2)
       }
     }
   }
@@ -131,22 +131,10 @@ object Value {
     final override def toString: String = throw InternalRuntimeException(s"Value.Arr does not support `toString`.")
   }
 
-  case class Con(con: ConValue, chan: Channel) extends Channel {
-    override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = chan.get(currentLabel)
-
-    override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = chan.tryGet(currentLabel)
-
-    override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = chan.put(e, currentLabel)
-
-    override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = chan.checkAccess(currentLabel)
-
-    override def pols: Policy = chan.pols
-  }
-
-  sealed trait ConValue
-  case class ConArrow(c1: ConValue, c2: ConValue) extends ConValue
-  case class ConWhiteList(wl: Policy) extends ConValue
-  case class ConBase(t: MonoType) extends ConValue
+  sealed trait Con
+  case class ConArrow(c1: Con, c2: Con) extends Con
+  case class ConWhiteList(wl: Policy) extends Con
+  case class ConBase(t: MonoType) extends Con
 
   type KLabel = List[String]
 
@@ -293,13 +281,11 @@ object Value {
     def getChannel(implicit loc: SourceLocation): ChannelImpl = lit match {
       case c: ChannelImpl => c
       case g: Guard => g.getChannel
-      case _: Con => throw InternalRuntimeException(s"Illegal getChannel on Con inside Guard @$loc")
     }
 
     def getAllLabels(implicit loc: SourceLocation): List[(KLabel, KLabel)] = lit match {
       case _: ChannelImpl => List((to, from))
       case g: Guard => (to, from) :: g.getAllLabels
-      case _: Con => throw InternalRuntimeException(s"Illegal getAllLabels on Con inside Guard @$loc")
     }
 
     override def toString: String = {
@@ -335,7 +321,6 @@ object Value {
             error(p, from)
         case ChannelImpl(_, None) => ()
         case l: Guard => l.checkAccess(currentLabel)
-        case _: Con => throw InternalRuntimeException(s"Illegal checkAccess on Con inside Guard @$loc")
       }
     }
   }
