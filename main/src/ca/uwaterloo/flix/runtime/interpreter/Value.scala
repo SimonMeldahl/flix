@@ -131,6 +131,23 @@ object Value {
     final override def toString: String = throw InternalRuntimeException(s"Value.Arr does not support `toString`.")
   }
 
+  case class Con(con: ConValue, chan: Channel) extends Channel {
+    override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = chan.get(currentLabel)
+
+    override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = chan.tryGet(currentLabel)
+
+    override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = chan.put(e, currentLabel)
+
+    override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = chan.checkAccess(currentLabel)
+
+    override def pols: Policy = chan.pols
+  }
+
+  sealed trait ConValue
+  case class ConArrow(c1: ConValue, c2: ConValue) extends ConValue
+  case class ConWhiteList(wl: Policy) extends ConValue
+  case class ConBase(t: MonoType) extends ConValue
+
   type KLabel = List[String]
 
   def kLabelString(kLabel: KLabel): String = {
@@ -273,18 +290,20 @@ object Value {
   }
 
   case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy) extends Channel {
-    def getChannel: ChannelImpl = lit match {
+    def getChannel(implicit loc: SourceLocation): ChannelImpl = lit match {
       case c: ChannelImpl => c
       case g: Guard => g.getChannel
+      case _: Con => throw InternalRuntimeException(s"Illegal getChannel on Con inside Guard @$loc")
     }
 
-    def getAllLabels: List[(KLabel, KLabel)] = lit match {
+    def getAllLabels(implicit loc: SourceLocation): List[(KLabel, KLabel)] = lit match {
       case _: ChannelImpl => List((to, from))
       case g: Guard => (to, from) :: g.getAllLabels
+      case _: Con => throw InternalRuntimeException(s"Illegal getAllLabels on Con inside Guard @$loc")
     }
 
     override def toString: String = {
-      getAllLabels.map(l => s"${kLabelString(l._1)} <- ${kLabelString(l._2)}").mkString("[", ", ", "]")
+      getAllLabels(SourceLocation.Unknown).map(l => s"${kLabelString(l._1)} <- ${kLabelString(l._2)}").mkString("[", ", ", "]")
     }
 
     override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
@@ -316,6 +335,7 @@ object Value {
             error(p, from)
         case ChannelImpl(_, None) => ()
         case l: Guard => l.checkAccess(currentLabel)
+        case _: Con => throw InternalRuntimeException(s"Illegal checkAccess on Con inside Guard @$loc")
       }
     }
   }

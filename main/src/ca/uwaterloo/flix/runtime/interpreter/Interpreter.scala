@@ -297,9 +297,16 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         })
         Value.Unit
 
-      case Expression.Con(con, chan, tpe, loc) =>
-        // TODO(LBS): implement
-        ???
+      case Expression.Con(con, chan, _, loc) =>
+        def visitCon(con: ConRule): Value.ConValue = con match {
+          case ConArrow(c1, c2) => Value.ConArrow(visitCon(c1), visitCon(c2))
+          case ConWhiteList(wl) =>
+            val whiteList = cast2array(eval(wl, env0, lenv0, root, currentLabel)).elms.map(cast2str(_).split('.').toList).toList
+            if (whiteList == List(List("?"))) Value.ConWhiteList(None)
+            else Value.ConWhiteList(Some(whiteList))
+          case ConBase(t) => Value.ConBase(t)
+        }
+        Value.Con(visitCon(con), cast2channel(eval(chan, env0, lenv0, root, currentLabel)))
 
       case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
 
@@ -674,6 +681,11 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
   def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef): AnyRef = value match {
     case _: Value.Int32 | Value.True | Value.False | Value.Unit | _: Value.Str | _: Value.Arr => value
+    case Value.Con(con, c) => con match {
+      case Value.ConArrow(c1, c2) => ???
+      case Value.ConWhiteList(wl) => Value.Guard(c, fromLabel, toLabel, wl)
+      case Value.ConBase(t) => t
+    }
     case c: Value.Channel => Value.Guard(c, fromLabel, toLabel, c.pols) // TODO(LBS): policy from K contract
     case _: Value.Closure | _: Value.Lambda => Value.Lambda(value, fromLabel, toLabel)
   }

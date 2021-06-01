@@ -1,6 +1,6 @@
 namespace ThirdPartyProducerA {
     pub def name(): String & Pure = "ThirdPartyProducerA"
-    pub def produce(consumer: Int -> _ & Impure): Unit & Impure = 
+    pub def produce(consumer: Int -> _ & Impure, con: _): Unit & Impure =
         /// ...
         consumer(1); 
         /// ...
@@ -36,8 +36,8 @@ namespace OurCode {
         let f = x -> {(c <- x); ()};
         /// for access control we have to "trust" ourselves to not make this mistake
         /// let f = x -> (c <- x);
-        ThirdPartyProducerA.produce(f);
-        ThirdPartyProducerB.produce(f);
+        con(..., ThirdPartyProducerA.produce(f));
+        con(..., ThirdPartyProducerB.produce)(f);
         ChannelLibrary.receive(c);
         0
 }
