@@ -828,15 +828,15 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
       }
 
       def conPrimary: Rule1[ParsedAst.ConRule] = rule {
-        conWhiteList | conBase | ( "(" ~ optWS ~ conArrow ~ optWS ~ ")" )
-      }
-
-      def conWhiteList: Rule1[ParsedAst.ConRule] = rule {
-        Expression ~> ParsedAst.ConWhiteList
+        conBase | conWhiteList | ( "(" ~ optWS ~ conArrow ~ optWS ~ ")" )
       }
 
       def conBase: Rule1[ParsedAst.ConRule] = rule {
         Type ~> ParsedAst.ConBase
+      }
+
+      def conWhiteList: Rule1[ParsedAst.ConRule] = rule {
+        Expression ~> ParsedAst.ConWhiteList
       }
 
       rule {
