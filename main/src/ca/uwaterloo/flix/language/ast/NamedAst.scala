@@ -188,7 +188,7 @@ object NamedAst {
 
     case class Spawn(exp: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
-    case class Con(con: NamedAst.ConRule, chan: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
+    case class Con(con: NamedAst.ConRule, fun: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
     case class Lazy(exp: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 

@@ -445,13 +445,13 @@ object Lowering extends Phase[Root, Root] {
       val t = visitType(tpe)
       Expression.Spawn(e, t, eff, loc)
 
-    case Expression.Con(con, chan, tpe, eff, loc) =>
+    case Expression.Con(con, fun, tpe, eff, loc) =>
       def visitCon(con: ConRule): ConRule = con match {
         case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
         case ConWhiteList(wl) => ConWhiteList(visitExp(wl))
         case ConBase(t) => ConBase(visitType(t))
       }
-      val e = visitExp(chan)
+      val e = visitExp(fun)
       val conVal = visitCon(con)
       val t = visitType(tpe)
       Expression.Con(conVal, e, t, eff, loc)
@@ -1384,13 +1384,13 @@ object Lowering extends Phase[Root, Root] {
       val e = substExp(exp, subst)
       Expression.Spawn(e, tpe, eff, loc)
 
-    case Expression.Con(con, chan, tpe, eff, loc) =>
+    case Expression.Con(con, fun, tpe, eff, loc) =>
       def visitCon(con: ConRule): ConRule = con match {
         case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
         case ConWhiteList(wl) => ConWhiteList(substExp(wl, subst))
         case ConBase(t) => ConBase(t)
       }
-      Expression.Con(visitCon(con), substExp(chan, subst), tpe, eff, loc)
+      Expression.Con(visitCon(con), substExp(fun, subst), tpe, eff, loc)
 
     case Expression.Lazy(exp, tpe, loc) =>
       val e = substExp(exp, subst)

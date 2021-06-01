@@ -277,13 +277,13 @@ object TreeShaker extends Phase[Root, Root] {
     case Expression.Spawn(exp, _, _) =>
       visitExp(exp)
 
-    case Expression.Con(con, chan, tpe, loc) =>
+    case Expression.Con(con, fun, tpe, loc) =>
       def visitCon(con: ConRule): Set[Symbol.DefnSym] = con match {
         case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
         case ConWhiteList(wl) => visitExp(wl)
         case ConBase(t) => Set.empty
       }
-      visitCon(con) ++ visitExp(chan)
+      visitCon(con) ++ visitExp(fun)
 
     case Expression.Lazy(exp, _, _) =>
       visitExp(exp)

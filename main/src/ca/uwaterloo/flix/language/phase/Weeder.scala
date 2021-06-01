@@ -1305,7 +1305,7 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
         case e => WeededAst.Expression.Spawn(e, mkSL(sp1, sp2))
       }
 
-    case ParsedAst.Expression.Con(sp1, con, chan, sp2) =>
+    case ParsedAst.Expression.Con(sp1, con, fun, sp2) =>
       def visitCon(con: ParsedAst.ConRule): Validation[WeededAst.ConRule, WeederError] = con match {
         case ParsedAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
           (c1, c2) => WeededAst.ConArrow(c1, c2)
@@ -1316,8 +1316,8 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
         case ParsedAst.ConBase(t) => WeededAst.ConBase(visitType(t)).toSuccess
       }
 
-      mapN(visitCon(con), visitExp(chan)) {
-        (con, chan) => WeededAst.Expression.Con(con, chan, mkSL(sp1, sp2))
+      mapN(visitCon(con), visitExp(fun)) {
+        (con, fun) => WeededAst.Expression.Con(con, fun, mkSL(sp1, sp2))
       }
 
     case ParsedAst.Expression.Lazy(sp1, exp, sp2) =>

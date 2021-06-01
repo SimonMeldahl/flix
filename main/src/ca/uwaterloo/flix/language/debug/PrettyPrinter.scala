@@ -418,9 +418,9 @@ object PrettyPrinter {
           vt.text("spawn ")
           visitExp(exp)
 
-        case Expression.Con(con, chan, tpe, loc) =>
+        case Expression.Con(con, fun, tpe, loc) =>
           vt.text("con ")
-          visitExp(chan)
+          visitExp(fun)
 
         case Expression.Lazy(exp, tpe, loc) =>
           vt.text("lazy ")

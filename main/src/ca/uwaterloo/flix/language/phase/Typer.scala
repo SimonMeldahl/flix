@@ -1309,7 +1309,7 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
           resultEff = Type.Impure
         } yield (constrs, resultTyp, resultEff)
 
-      case ResolvedAst.Expression.Con(con, chan, loc) =>
+      case ResolvedAst.Expression.Con(con, fun, loc) =>
         def visitCon(con: ResolvedAst.ConRule): InferMonad[(List[Ast.TypeConstraint], Type, Type)] = con match {
           case ResolvedAst.ConArrow(c1, c2) => for {
             (c1Constrs, c1Tpe, _) <- visitCon(c1)
@@ -1323,13 +1323,11 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
           case ResolvedAst.ConBase(_) => InferMonad.point((List(), Type.Unit, Type.Impure))
         }
 
-        val elementType = Type.freshVar(Kind.Star)
         for {
           (conConstrs, _, _) <- visitCon(con)
-          (chanConstrs, chanTpe, _) <- visitExp(chan)
-          channelType <- unifyTypeM(chanTpe, Type.mkChannel(elementType), loc)
+          (funConstrs, funTpe, _) <- visitExp(fun)
           resultEff = Type.Impure
-        } yield (conConstrs ++ chanConstrs, channelType, resultEff)
+        } yield (conConstrs ++ funConstrs, funTpe, resultEff)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         //
@@ -1789,15 +1787,15 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         val eff = e.eff
         TypedAst.Expression.Spawn(e, tpe, eff, loc)
 
-      case ResolvedAst.Expression.Con(con, chan, loc) =>
+      case ResolvedAst.Expression.Con(con, fun, loc) =>
         def visitCon(con: ResolvedAst.ConRule): TypedAst.ConRule = con match {
           case ResolvedAst.ConArrow(c1, c2) => TypedAst.ConArrow(visitCon(c1), visitCon(c2))
           case ResolvedAst.ConWhiteList(wl) => TypedAst.ConWhiteList(visitExp(wl, subst0))
           case ResolvedAst.ConBase(t) => TypedAst.ConBase(t)
         }
         val conVal = visitCon(con)
-        val chanVal = visitExp(chan, subst0)
-        TypedAst.Expression.Con(conVal, chanVal, chanVal.tpe, chanVal.eff, loc)
+        val funVal = visitExp(fun, subst0)
+        TypedAst.Expression.Con(conVal, funVal, funVal.tpe, funVal.eff, loc)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         val e = visitExp(exp, subst0)

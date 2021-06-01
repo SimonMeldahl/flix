@@ -196,7 +196,7 @@ object ErasedAst {
 
     case class Spawn(exp: ErasedAst.Expression[PType], tpe: EType[PReference[PUnit]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PUnit]]
 
-    case class Con[T <: PType](con: ErasedAst.ConRule, chan: ErasedAst.Expression[PReference[PChan[T]]], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
+    case class Con[T <: PType](con: ErasedAst.ConRule, fun: ErasedAst.Expression[PReference[PChan[T]]], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
 
     case class Lazy[T <: PType](exp: ErasedAst.Expression[T], tpe: EType[PReference[PLazy[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PLazy[T]]]
 

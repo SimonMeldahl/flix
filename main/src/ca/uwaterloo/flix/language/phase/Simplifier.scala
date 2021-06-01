@@ -272,13 +272,13 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         val lambdaExp = SimplifiedAst.Expression.Lambda(List(), e, lambdaTyp, loc)
         SimplifiedAst.Expression.Spawn(lambdaExp, lambdaTyp, loc)
 
-      case TypedAst.Expression.Con(con, chan, tpe, _, loc) =>
+      case TypedAst.Expression.Con(con, fun, tpe, _, loc) =>
         def visitCon(con: TypedAst.ConRule): SimplifiedAst.ConRule = con match {
           case TypedAst.ConArrow(c1, c2) => SimplifiedAst.ConArrow(visitCon(c1), visitCon(c2))
           case TypedAst.ConWhiteList(wl) => SimplifiedAst.ConWhiteList(visitExp(wl))
           case TypedAst.ConBase(t) => SimplifiedAst.ConBase(t)
         }
-        val c = visitExp(chan)
+        val c = visitExp(fun)
         val conValue = visitCon(con)
         SimplifiedAst.Expression.Con(conValue, c, tpe, loc)
 
@@ -1004,15 +1004,15 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         val e = visitExp(exp)
         SimplifiedAst.Expression.Spawn(e, tpe, loc)
 
-      case SimplifiedAst.Expression.Con(con, chan, tpe, loc) =>
+      case SimplifiedAst.Expression.Con(con, fun, tpe, loc) =>
         def visitCon(con: SimplifiedAst.ConRule): SimplifiedAst.ConRule = con match {
           case SimplifiedAst.ConArrow(c1, c2) => SimplifiedAst.ConArrow(visitCon(c1), visitCon(c2))
           case SimplifiedAst.ConWhiteList(wl) => SimplifiedAst.ConWhiteList(visitExp(wl))
           case SimplifiedAst.ConBase(t) => SimplifiedAst.ConBase(t)
         }
-        val e = visitExp(chan)
-        val chanVal = visitCon(con)
-        SimplifiedAst.Expression.Con(chanVal, e, tpe, loc)
+        val e = visitExp(fun)
+        val conVal = visitCon(con)
+        SimplifiedAst.Expression.Con(conVal, e, tpe, loc)
 
       case SimplifiedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)

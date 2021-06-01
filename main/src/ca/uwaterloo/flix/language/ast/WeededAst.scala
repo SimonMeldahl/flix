@@ -189,7 +189,7 @@ object WeededAst {
 
     case class Spawn(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
-    case class Con(con: WeededAst.ConRule, chan: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
+    case class Con(con: WeededAst.ConRule, fun: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class Lazy(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 

@@ -692,13 +692,13 @@ object JvmOps {
 
       case Expression.Spawn(exp, tpe, loc) => visitExp(exp)
 
-      case Expression.Con(con, chan, _, _) =>
+      case Expression.Con(con, fun, _, _) =>
         def visitCon(con: ConRule): Set[ClosureInfo] = con match {
           case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
           case ConWhiteList(wl) => visitExp(wl)
           case ConBase(t) => Set.empty
         }
-        visitCon(con) ++ visitExp(chan)
+        visitCon(con) ++ visitExp(fun)
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp)
 
@@ -708,7 +708,7 @@ object JvmOps {
 
       case Expression.MatchError(tpe, loc) => Set.empty
 
-      case Expression.K(exp, from, to, tpe, loc) => ???
+      case Expression.K(exp, from, to, con, tpe, loc) => ???
     }
 
     // TODO: Look for closures in other places.
@@ -1003,13 +1003,13 @@ object JvmOps {
 
       case Expression.Spawn(exp, tpe, loc) => visitExp(exp) + tpe
 
-      case Expression.Con(con, chan, tpe, _) =>
+      case Expression.Con(con, fun, tpe, _) =>
         def visitCon(con: ConRule): Set[MonoType] = con match {
           case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
           case ConWhiteList(wl) => visitExp(wl)
           case ConBase(t) => Set(t)
         }
-        visitCon(con) ++ visitExp(chan) + tpe
+        visitCon(con) ++ visitExp(fun) + tpe
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp) + tpe
 
@@ -1019,7 +1019,7 @@ object JvmOps {
 
       case Expression.MatchError(tpe, loc) => Set(tpe)
 
-      case Expression.K(exp, from, to, tpe, loc) => ???
+      case Expression.K(exp, from, to, con, tpe, loc) => ???
     }
 
     // TODO: Magnus: Look for types in other places.

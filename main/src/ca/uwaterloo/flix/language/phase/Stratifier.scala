@@ -359,7 +359,7 @@ object Stratifier extends Phase[Root, Root] {
         case e => Expression.Spawn(e, tpe, eff, loc)
       }
 
-    case Expression.Con(con, chan, tpe, eff, loc) =>
+    case Expression.Con(con, fun, tpe, eff, loc) =>
       def visitCon(con: ConRule): Validation[ConRule, StratificationError] = con match {
         case ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
           (c1, c2) => ConArrow(c1, c2)
@@ -369,8 +369,8 @@ object Stratifier extends Phase[Root, Root] {
         }
         case b: ConBase => b.toSuccess
       }
-      mapN(visitCon(con), visitExp(chan)) {
-        (con, chan) => Expression.Con(con, chan, tpe, eff, loc)
+      mapN(visitCon(con), visitExp(fun)) {
+        (con, fun) => Expression.Con(con, fun, tpe, eff, loc)
       }
 
     case Expression.Lazy(exp, tpe, loc) =>
@@ -626,13 +626,13 @@ object Stratifier extends Phase[Root, Root] {
     case Expression.Spawn(exp, _, _, _) =>
       dependencyGraphOfExp(exp)
 
-    case Expression.Con(con, chan, tpe, eff, loc) =>
+    case Expression.Con(con, fun, tpe, eff, loc) =>
       def visitCon(con: ConRule): DependencyGraph = con match {
         case ConArrow(c1, c2) => visitCon(c1) + visitCon(c2)
         case ConWhiteList(wl) => dependencyGraphOfExp(wl)
         case ConBase(_) => DependencyGraph.empty
       }
-      visitCon(con) + dependencyGraphOfExp(chan)
+      visitCon(con) + dependencyGraphOfExp(fun)
 
     case Expression.Lazy(exp, _, _) =>
       dependencyGraphOfExp(exp)

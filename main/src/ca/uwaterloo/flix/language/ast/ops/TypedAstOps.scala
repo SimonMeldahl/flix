@@ -210,13 +210,13 @@ object TypedAstOps {
 
       case Expression.Spawn(exp, tpe, eff, loc) => visitExp(exp, env0)
 
-      case Expression.Con(con, chan, tpe, eff, loc) =>
+      case Expression.Con(con, fun, tpe, eff, loc) =>
         def visitCon(con: ConRule): Map[Symbol.HoleSym, HoleContext] = con match {
           case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
           case ConWhiteList(wl) => visitExp(wl, env0)
           case ConBase(_) => Map.empty
         }
-        visitCon(con) ++ visitExp(chan, env0)
+        visitCon(con) ++ visitExp(fun, env0)
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp, env0)
 
@@ -386,13 +386,13 @@ object TypedAstOps {
     case Expression.PutChannel(exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.SelectChannel(rules, default, _, _, _) => rules.flatMap(rule => sigSymsOf(rule.chan) ++ sigSymsOf(rule.exp)).toSet ++ default.toSet.flatMap(sigSymsOf)
     case Expression.Spawn(exp, _, _, _) => sigSymsOf(exp)
-    case Expression.Con(con, chan, tpe, eff, loc) =>
+    case Expression.Con(con, fun, tpe, eff, loc) =>
       def visitCon(con: ConRule): Set[Symbol.SigSym] = con match {
         case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
         case ConWhiteList(wl) => sigSymsOf(wl)
         case ConBase(t) => Set.empty
       }
-      visitCon(con) ++ sigSymsOf(chan)
+      visitCon(con) ++ sigSymsOf(fun)
     case Expression.Lazy(exp, _, _) => sigSymsOf(exp)
     case Expression.Force(exp, _, _, _) => sigSymsOf(exp)
     case Expression.FixpointConstraintSet(_, _, _, _) => Set.empty
@@ -631,13 +631,13 @@ object TypedAstOps {
     case Expression.Spawn(exp, _, _, _) =>
       freeVars(exp)
 
-    case Expression.Con(con, chan, _, _, _) =>
+    case Expression.Con(con, fun, _, _, _) =>
       def freeVarsCons(con: ConRule): Map[Symbol.VarSym, Type] = con match {
         case ConArrow(c1, c2) => freeVarsCons(c1) ++ freeVarsCons(c2)
         case ConWhiteList(wl) => freeVars(wl)
         case ConBase(_) => Map.empty
       }
-      freeVarsCons(con) ++ freeVars(chan)
+      freeVarsCons(con) ++ freeVars(fun)
 
     case Expression.Lazy(exp, _, _) =>
       freeVars(exp)

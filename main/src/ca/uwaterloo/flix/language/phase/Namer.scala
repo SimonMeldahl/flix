@@ -850,7 +850,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
         case e => NamedAst.Expression.Spawn(e, loc)
       }
 
-    case WeededAst.Expression.Con(con, chan, loc) =>
+    case WeededAst.Expression.Con(con, fun, loc) =>
       def visitCon(con: WeededAst.ConRule): Validation[NamedAst.ConRule, NameError] = con match {
         case WeededAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
           (c1, c2) => NamedAst.ConArrow(c1, c2)
@@ -863,8 +863,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
         }
       }
 
-      mapN(visitCon(con), visitExp(chan, env0, uenv0, tenv0)) {
-        (con, chan) => NamedAst.Expression.Con(con, chan, loc)
+      mapN(visitCon(con), visitExp(fun, env0, uenv0, tenv0)) {
+        (con, fun) => NamedAst.Expression.Con(con, fun, loc)
       }
 
     case WeededAst.Expression.Lazy(exp, loc) =>
@@ -1292,13 +1292,13 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       val defaultFreeVars = default.map(freeVars).getOrElse(Nil)
       rulesFreeVars ++ defaultFreeVars
     case WeededAst.Expression.Spawn(exp, loc) => freeVars(exp)
-    case WeededAst.Expression.Con(con, chan, loc) =>
+    case WeededAst.Expression.Con(con, fun, loc) =>
       def freeVarsCons(con: WeededAst.ConRule): List[Name.Ident] = con match {
         case WeededAst.ConArrow(c1, c2) => freeVarsCons(c1) ++ freeVarsCons(c2)
         case WeededAst.ConWhiteList(wl) => freeVars(wl)
         case WeededAst.ConBase(t) => freeVars(t)
       }
-      freeVarsCons(con) ++ freeVars(chan)
+      freeVarsCons(con) ++ freeVars(fun)
     case WeededAst.Expression.Lazy(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Force(exp, loc) => freeVars(exp)
     case WeededAst.Expression.FixpointConstraintSet(cs, loc) => cs.flatMap(freeVarsConstraint)

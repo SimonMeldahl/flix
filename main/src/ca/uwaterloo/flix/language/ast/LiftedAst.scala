@@ -189,7 +189,7 @@ object LiftedAst {
 
     case class Spawn(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
-    case class Con(con: LiftedAst.ConRule, chan: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
+    case class Con(con: LiftedAst.ConRule, fun: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
     case class Lazy(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 

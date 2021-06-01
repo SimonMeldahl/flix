@@ -414,13 +414,13 @@ object Monomorph extends Phase[TypedAst.Root, TypedAst.Root] {
           val e = visitExp(exp, env0)
           Expression.Spawn(e, subst0(tpe), eff, loc)
 
-        case Expression.Con(con, chan, tpe, eff, loc) =>
+        case Expression.Con(con, fun, tpe, eff, loc) =>
           def visitCon(con: ConRule): ConRule = con match {
             case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
             case ConWhiteList(wl) => ConWhiteList(visitExp(wl, env0))
             case ConBase(t) => ConBase(t)
           }
-          Expression.Con(visitCon(con), visitExp(chan, env0), subst0(tpe), eff, loc)
+          Expression.Con(visitCon(con), visitExp(fun, env0), subst0(tpe), eff, loc)
 
         case Expression.Lazy(exp, tpe, loc) =>
           val e = visitExp(exp, env0)

@@ -309,15 +309,15 @@ object Optimizer extends Phase[Root, Root] {
         val e = visitExp(exp, env0)
         Expression.Spawn(e, tpe, loc)
 
-      case Expression.Con(con, chan, tpe, loc) =>
+      case Expression.Con(con, fun, tpe, loc) =>
         def visitCon(con: ConRule): ConRule = con match {
           case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
           case ConWhiteList(wl) =>ConWhiteList(visitExp(wl, env0))
           case ConBase(t) => ConBase(t)
         }
-        val c = visitExp(chan, env0)
+        val f = visitExp(fun, env0)
         val conVal = visitCon(con)
-        Expression.Con(conVal, c, tpe, loc)
+        Expression.Con(conVal, f, tpe, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp, env0)

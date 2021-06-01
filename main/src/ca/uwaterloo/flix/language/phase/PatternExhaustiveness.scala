@@ -319,7 +319,7 @@ object PatternExhaustiveness extends Phase[TypedAst.Root, TypedAst.Root] {
           _ <- checkPats(exp, root)
         } yield tast
 
-        case Expression.Con(con, chan, tpe, eff, loc) =>
+        case Expression.Con(con, fun, tpe, eff, loc) =>
           def visitCon(con: TypedAst.ConRule): Validation[TypedAst.Expression, CompilationError] = con match {
             case TypedAst.ConArrow(c1, c2) => for {
               _ <- visitCon(c1)
@@ -332,7 +332,7 @@ object PatternExhaustiveness extends Phase[TypedAst.Root, TypedAst.Root] {
           }
           for {
             _ <- visitCon(con)
-            _ <- checkPats(chan, root)
+            _ <- checkPats(fun, root)
           } yield tast
 
         case Expression.Lazy(exp, _, _) => for {

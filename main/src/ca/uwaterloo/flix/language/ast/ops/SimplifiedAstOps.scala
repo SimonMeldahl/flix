@@ -306,14 +306,14 @@ object SimplifiedAstOps {
         checkExp(exp, env0, ienv0)
         checkType(tpe)
 
-      case Expression.Con(con, chan, tpe, loc) =>
+      case Expression.Con(con, fun, tpe, loc) =>
         def visitCon(con: ConRule): Unit = con match {
           case ConArrow(c1, c2) => visitCon(c1); visitCon(c2)
           case ConWhiteList(wl) => checkExp(wl, env0, ienv0)
           case ConBase(t) => checkType(t)
         }
         visitCon(con)
-        checkExp(chan, env0, ienv0)
+        checkExp(fun, env0, ienv0)
         checkType(tpe)
 
       case Expression.Lazy(exp, tpe, loc) =>

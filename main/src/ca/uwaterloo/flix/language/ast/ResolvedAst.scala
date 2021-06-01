@@ -171,7 +171,7 @@ object ResolvedAst {
 
     case class Spawn(exp: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
 
-    case class Con(con: ResolvedAst.ConRule, chan: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
+    case class Con(con: ResolvedAst.ConRule, fun: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
 
     case class Lazy(exp: ResolvedAst.Expression, loc: SourceLocation) extends ResolvedAst.Expression
 

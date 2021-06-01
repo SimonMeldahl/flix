@@ -312,13 +312,13 @@ object ClosureConv extends Phase[Root, Root] {
       val e = visitExp(exp)
       Expression.Spawn(e, tpe, loc)
 
-    case Expression.Con(con, chan, tpe, loc) =>
+    case Expression.Con(con, fun, tpe, loc) =>
       def visitCon(con: ConRule): ConRule = con match {
         case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
         case ConWhiteList(wl) => ConWhiteList(visitExp(wl))
         case ConBase(t) => ConBase(t)
       }
-      val c = visitExp(chan)
+      val c = visitExp(fun)
       val conVal = visitCon(con)
       Expression.Con(conVal, c, tpe, loc)
 
@@ -436,13 +436,13 @@ object ClosureConv extends Phase[Root, Root] {
 
     case Expression.Spawn(exp, tpe, loc) => freeVars(exp)
 
-    case Expression.Con(con, chan, _, _) =>
+    case Expression.Con(con, fun, _, _) =>
       def visitCon(con: ConRule): mutable.LinkedHashSet[(Symbol.VarSym, Type)] = con match {
         case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
         case ConWhiteList(wl) => freeVars(wl)
         case ConBase(t) => mutable.LinkedHashSet.empty
       }
-      freeVars(chan) ++ visitCon(con)
+      freeVars(fun) ++ visitCon(con)
 
     case Expression.Lazy(exp, tpe, loc) => freeVars(exp)
 
@@ -715,13 +715,13 @@ object ClosureConv extends Phase[Root, Root] {
         val e = visitExp(exp)
         Expression.Spawn(e, tpe, loc)
 
-      case Expression.Con(con, chan, tpe, loc) =>
+      case Expression.Con(con, fun, tpe, loc) =>
         def visitCon(con: ConRule): ConRule = con match {
           case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
           case ConWhiteList(wl) => ConWhiteList(visitExp(wl))
           case ConBase(t) => ConBase(t)
         }
-        Expression.Con(visitCon(con), visitExp(chan), tpe, loc)
+        Expression.Con(visitCon(con), visitExp(fun), tpe, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)
