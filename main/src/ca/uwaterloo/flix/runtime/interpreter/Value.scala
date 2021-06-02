@@ -19,6 +19,7 @@ package ca.uwaterloo.flix.runtime.interpreter
 import ca.uwaterloo.flix.api.Flix
 import ca.uwaterloo.flix.language.ast.FinalAst.{Expression, Root}
 import ca.uwaterloo.flix.language.ast.{MonoType, SourceLocation, Symbol}
+import ca.uwaterloo.flix.runtime.interpreter.Interpreter.reduceK
 import ca.uwaterloo.flix.runtime.interpreter.{Channel => JavaChannel}
 import ca.uwaterloo.flix.util.InternalRuntimeException
 
@@ -251,6 +252,13 @@ object Value {
       }
 
       throw new RuntimeException("Thread interrupted")
+    }
+
+    def reapply(c: Value.Channel, ref: Value.Channel, e: AnyRef)(implicit loc: SourceLocation): AnyRef = (c, ref) match {
+      case (cguard@Value.Guard(lit, from, to, _), ref: Value.Channel) if cguard != ref =>
+        reduceK(from, to, reapply(lit, ref, e), Value.ConWhiteList(None))
+      case (cguard: Value.Channel, refguard: Value.Channel) if cguard == refguard => e
+      case _ => throw InternalRuntimeException(s"conflict between channel reference and given channel $c $ref @$loc")
     }
   }
 

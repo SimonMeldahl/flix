@@ -257,21 +257,18 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         }
         Value.ChannelImpl(new JavaChannel(size), pols)
 
-      case Expression.GetChannel(exp, tpe, loc) =>
-        def reapply(c: Value.Channel, e: AnyRef): AnyRef = c match {
-          case Value.ChannelImpl(c, pols) => e
-          case Value.Guard(lit, from, to, pols) =>
-            reduceK(from, to, reapply(lit, e), Value.ConWhiteList(None))
-        }
+      case Expression.GetChannel(exp, _, loc) =>
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
-        reapply(c, c.get(currentLabel))
+        val Value.Tuple(e :: cinner :: Nil) = c.get(currentLabel)
+        Value.Channel.reapply(c, cast2channel(cinner), e)
 
       case Expression.PutChannel(exp1, exp2, tpe, loc) =>
         val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
         val e2 = eval(exp2, env0, lenv0, root, currentLabel)
-        c.put(e2, currentLabel)
+        c.put(Value.Tuple(List(e2, c)), currentLabel)
 
       case Expression.SelectChannel(rules, default, _, _) =>
+        // TODO(LBS): fix
         // Evaluate all Channel expressions
         val rs = rules.map { r =>
           (r.sym, eval(r.chan, env0, lenv0, root, currentLabel), r.exp)
@@ -291,8 +288,9 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
         // The default was not chosen. Find the matching rule
         val selectedRule = rs.apply(selectChoice.branchNumber)
+        val Value.Tuple(e :: refChannel :: Nil) = selectChoice.element
         // Bind the sym of the rule to the element from the selected channel
-        val newEnv = env0 + (selectedRule._1.toString -> selectChoice.element)
+        val newEnv = env0 + (selectedRule._1.toString -> Value.Channel.reapply(cast2channel(channelsArray(selectChoice.branchNumber)), cast2channel(refChannel), e))
         // Evaluate the expression of the selected rule
         eval(selectedRule._3, newEnv, lenv0, root, currentLabel)
 
