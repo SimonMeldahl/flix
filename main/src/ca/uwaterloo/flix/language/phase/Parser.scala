@@ -822,25 +822,8 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def Con: Rule1[ParsedAst.Expression.Con] = {
-      //TODO(LBS) maybe wrong association
-      def conArrow: Rule1[ParsedAst.ConRule] = rule {
-        conPrimary ~ optional(WS ~ atomic("->") ~ WS ~ conArrow ~> ParsedAst.ConArrow)
-      }
-
-      def conPrimary: Rule1[ParsedAst.ConRule] = rule {
-        conBase | conWhiteList | ( "(" ~ optWS ~ conArrow ~ optWS ~ ")" )
-      }
-
-      def conBase: Rule1[ParsedAst.ConRule] = rule {
-        Type ~> ParsedAst.ConBase
-      }
-
-      def conWhiteList: Rule1[ParsedAst.ConRule] = rule {
-        Expression ~> ParsedAst.ConWhiteList
-      }
-
       rule {
-        SP ~ keyword("con") ~ "(" ~ optWS ~ conArrow ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con
+        SP ~ keyword("con") ~ "(" ~ optWS ~ Contract ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con
       }
     }
 
@@ -1345,6 +1328,147 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
 
     def TypeArguments: Rule1[Seq[ParsedAst.Type]] = rule {
       "[" ~ optWS ~ zeroOrMore(Type).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ "]"
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Contract                                                                //
+  /////////////////////////////////////////////////////////////////////////////
+  def Contract: Rule1[ParsedAst.Contract] = rule {
+    Contracts.UnaryArrow
+  }
+
+  object Contracts {
+
+    def UnaryArrow: Rule1[ParsedAst.Contract] = rule {
+      Or ~ optional(
+        (optWS ~ atomic("~>") ~ optWS ~ Contract ~ SP ~> ParsedAst.Contract.UnaryImpureArrow) |
+          (optWS ~ atomic("->") ~ optWS ~ Contract ~ optional(WS ~ atomic("&") ~ WS ~ Contract) ~ SP ~> ParsedAst.Contract.UnaryPolymorphicArrow)
+      )
+    }
+
+    def Or: Rule1[ParsedAst.Contract] = rule {
+      And ~ zeroOrMore(WS ~ keyword("or") ~ WS ~ Contract ~ SP ~> ParsedAst.Contract.Or)
+    }
+
+    def And: Rule1[ParsedAst.Contract] = rule {
+      Ascribe ~ zeroOrMore(WS ~ keyword("and") ~ WS ~ Contract ~ SP ~> ParsedAst.Contract.And)
+    }
+
+    def Ascribe: Rule1[ParsedAst.Contract] = rule {
+      Apply ~ optional(WS ~ keyword(":") ~ WS ~ Kind ~ SP ~> ParsedAst.Contract.Ascribe)
+    }
+
+    def Apply: Rule1[ParsedAst.Contract] = rule {
+      Primary ~ zeroOrMore(ContractArguments ~ SP ~> ParsedAst.Contract.Apply)
+    }
+
+    def Primary: Rule1[ParsedAst.Contract] = rule {
+      Arrow | Tuple | Record | SchemaContract | WildCard | Native | True | False | Pure | Impure | Not | WhiteList | Var | Ambiguous
+    }
+
+    def Arrow: Rule1[ParsedAst.Contract] = {
+      def ContractList: Rule1[Seq[ParsedAst.Contract]] = rule {
+        "(" ~ optWS ~ oneOrMore(Contract).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ ")"
+      }
+
+      rule {
+        SP ~ ContractList ~ optWS ~ (
+          (atomic("~>") ~ optWS ~ Contract ~ SP ~> ParsedAst.Contract.ImpureArrow) |
+            (atomic("->") ~ optWS ~ Contract ~ optional(WS ~ atomic("&") ~ WS ~ Contract) ~ SP ~> ParsedAst.Contract.PolymorphicArrow)
+          )
+      }
+    }
+
+    def Tuple: Rule1[ParsedAst.Contract] = {
+      def Unit: Rule1[ParsedAst.Contract] = rule {
+        SP ~ atomic("()") ~ SP ~> ParsedAst.Contract.Unit
+      }
+
+      def Singleton: Rule1[ParsedAst.Contract] = rule {
+        "(" ~ optWS ~ Contract ~ optWS ~ ")"
+      }
+
+      def Tuple: Rule1[ParsedAst.Contract] = rule {
+        SP ~ "(" ~ optWS ~ oneOrMore(Contract).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ ")" ~ SP ~> ParsedAst.Contract.Tuple
+      }
+
+      rule {
+        Unit | Singleton | Tuple
+      }
+    }
+
+    def Record: Rule1[ParsedAst.Contract] = {
+      def RecordFieldContract: Rule1[ParsedAst.RecordFieldContract] = rule {
+        SP ~ Names.Field ~ optWS ~ ":" ~ optWS ~ Contract ~ SP ~> ParsedAst.RecordFieldContract
+      }
+
+      rule {
+        SP ~ atomic("{") ~ optWS ~ zeroOrMore(RecordFieldContract).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ optional(optWS ~ "|" ~ optWS ~ Names.Variable) ~ optWS ~ "}" ~ SP ~> ParsedAst.Contract.Record
+      }
+    }
+
+    def SchemaContract: Rule1[ParsedAst.Contract] = {
+      def PredicateWithAlias: Rule1[ParsedAst.PredicateContract.PredicateWithAlias] = rule {
+        SP ~ Names.QualifiedPredicate ~ optional(ContractArguments) ~ SP ~> ParsedAst.PredicateContract.PredicateWithAlias
+      }
+
+      def RelPredicateWithContracts: Rule1[ParsedAst.PredicateContract.RelPredicateWithContracts] = rule {
+        SP ~ Names.Predicate ~ optWS ~ "(" ~ optWS ~ zeroOrMore(Contract).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ ")" ~ SP ~> ParsedAst.PredicateContract.RelPredicateWithContracts
+      }
+
+      def LatPredicateWithContracts: Rule1[ParsedAst.PredicateContract.LatPredicateWithContracts] = rule {
+        SP ~ Names.Predicate ~ optWS ~ "(" ~ optWS ~ zeroOrMore(Contract).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ ";" ~ optWS ~ Contract ~ optWS ~ ")" ~ SP ~> ParsedAst.PredicateContract.LatPredicateWithContracts
+      }
+
+      rule {
+        SP ~ atomic("#{") ~ optWS ~ zeroOrMore(RelPredicateWithContracts | LatPredicateWithContracts | PredicateWithAlias).separatedBy(optWS ~ "," ~ optWS) ~ optional(optWS ~ "|" ~ optWS ~ Names.Variable) ~ optWS ~ "}" ~ SP ~> ParsedAst.Contract.Schema
+      }
+    }
+
+    def WildCard: Rule1[ParsedAst.Contract] = rule {
+      SP ~ "?" ~ SP ~> ParsedAst.Contract.WildCard
+    }
+
+    def Native: Rule1[ParsedAst.Contract] = rule {
+      SP ~ atomic("##") ~ Names.JavaName ~ SP ~> ParsedAst.Contract.Native
+    }
+
+    def True: Rule1[ParsedAst.Contract] = rule {
+      SP ~ keyword("true") ~ SP ~> ParsedAst.Contract.True
+    }
+
+    def False: Rule1[ParsedAst.Contract] = rule {
+      SP ~ keyword("false") ~ SP ~> ParsedAst.Contract.False
+    }
+
+    def Pure: Rule1[ParsedAst.Contract] = rule {
+      SP ~ keyword("Pure") ~ SP ~> ParsedAst.Contract.True
+    }
+
+    def Impure: Rule1[ParsedAst.Contract] = rule {
+      SP ~ keyword("Impure") ~ SP ~> ParsedAst.Contract.False
+    }
+
+    def Not: Rule1[ParsedAst.Contract] = rule {
+      // NB: We must not use Contract here because it gives the wrong precedence.
+      SP ~ keyword("not") ~ WS ~ Apply ~ SP ~> ParsedAst.Contract.Not
+    }
+
+    def WhiteList: Rule1[ParsedAst.Contract] = rule {
+      SP ~ "{" ~ optWS ~ Expression ~ optWS ~ "}" ~ "[" ~ optWS ~ Contract ~ optWS ~ "]" ~ SP ~> ParsedAst.Contract.WhiteList
+    }
+
+    def Var: Rule1[ParsedAst.Contract] = rule {
+      SP ~ Names.Variable ~ SP ~> ParsedAst.Contract.Var
+    }
+
+    def Ambiguous: Rule1[ParsedAst.Contract] = rule {
+      SP ~ Names.QualifiedType ~ SP ~> ParsedAst.Contract.Ambiguous
+    }
+
+    def ContractArguments: Rule1[Seq[ParsedAst.Contract]] = rule {
+      "[" ~ optWS ~ zeroOrMore(Contract).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ "]"
     }
   }
 

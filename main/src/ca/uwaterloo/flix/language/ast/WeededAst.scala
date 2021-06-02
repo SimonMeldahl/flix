@@ -189,7 +189,7 @@ object WeededAst {
 
     case class Spawn(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
-    case class Con(con: WeededAst.ConRule, fun: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
+    case class Con(con: WeededAst.Contract, fun: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class Lazy(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
@@ -376,13 +376,60 @@ object WeededAst {
 
   case class SelectChannelRule(ident: Name.Ident, channel: WeededAst.Expression, exp: WeededAst.Expression)
 
-  sealed trait ConRule
 
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+  sealed trait Contract
 
-  case class ConWhiteList(wl: WeededAst.Expression) extends ConRule
+  object Contract {
 
-  case class ConBase(t: Type) extends ConRule
+    case class WildCard(loc: SourceLocation) extends WeededAst.Contract
+
+    case class WhiteList(exp: WeededAst.Expression, contract: Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Var(qname: Name.Ident, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Ambiguous(qname: Name.QName, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Unit(loc: SourceLocation) extends WeededAst.Contract
+
+    case class Tuple(elms: List[WeededAst.Contract], loc: SourceLocation) extends WeededAst.Contract
+
+    case class RecordEmpty(loc: SourceLocation) extends WeededAst.Contract
+
+    case class RecordExtend(field: Name.Field, tpe: WeededAst.Contract, rest: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class RecordGeneric(tvar: WeededAst.Contract.Var, loc: SourceLocation) extends WeededAst.Contract
+
+    case class SchemaEmpty(loc: SourceLocation) extends WeededAst.Contract
+
+    case class SchemaExtendByAlias(qname: Name.QName, targs: List[WeededAst.Contract], rest: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class SchemaExtendByContracts(name: Name.Ident, den: Ast.Denotation, tpes: List[WeededAst.Contract], rest: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class SchemaGeneric(tvar: WeededAst.Contract.Var, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Relation(tpes: List[WeededAst.Contract], loc: SourceLocation) extends WeededAst.Contract
+
+    case class Lattice(tpes: List[WeededAst.Contract], loc: SourceLocation) extends WeededAst.Contract
+
+    case class Native(fqn: String, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Arrow(tparams: List[WeededAst.Contract], eff: WeededAst.Contract, tresult: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Apply(tpe1: WeededAst.Contract, tpe2: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class True(loc: SourceLocation) extends WeededAst.Contract
+
+    case class False(loc: SourceLocation) extends WeededAst.Contract
+
+    case class Not(tpe: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class And(tpe1: WeededAst.Contract, tpe2: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Or(tpe1: WeededAst.Contract, tpe2: WeededAst.Contract, loc: SourceLocation) extends WeededAst.Contract
+
+    case class Ascribe(tpe: WeededAst.Contract, kind: Kind, loc: SourceLocation) extends WeededAst.Contract
+
+  }
 
   sealed trait TypeParam
 

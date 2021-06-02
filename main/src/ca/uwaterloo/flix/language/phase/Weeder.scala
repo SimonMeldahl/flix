@@ -1306,17 +1306,8 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
       }
 
     case ParsedAst.Expression.Con(sp1, con, fun, sp2) =>
-      def visitCon(con: ParsedAst.ConRule): Validation[WeededAst.ConRule, WeederError] = con match {
-        case ParsedAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
-          (c1, c2) => WeededAst.ConArrow(c1, c2)
-        }
-        case ParsedAst.ConWhiteList(wl) => visitExp(wl) map {
-          wl => WeededAst.ConWhiteList(wl)
-        }
-        case ParsedAst.ConBase(t) => WeededAst.ConBase(visitType(t)).toSuccess
-      }
 
-      mapN(visitCon(con), visitExp(fun)) {
+      mapN(visitContract(con), visitExp(fun)) {
         (con, fun) => WeededAst.Expression.Con(con, fun, mkSL(sp1, sp2))
       }
 
@@ -2000,6 +1991,160 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
       WeededAst.Type.Ascribe(t, k, mkSL(sp1, sp2))
   }
 
+  private def visitContract(con: ParsedAst.Contract)(implicit flix: Flix): Validation[WeededAst.Contract, WeederError] = con match {
+    case ParsedAst.Contract.WildCard(sp1, sp2) =>
+      WeededAst.Contract.WildCard(mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.WhiteList(sp1, exp, con, sp2) =>
+      mapN(visitExp(exp), visitContract(con))((e, c) => WeededAst.Contract.WhiteList(e, c, mkSL(sp1, sp2)))
+
+    case ParsedAst.Contract.Unit(sp1, sp2) =>
+      WeededAst.Contract.Unit(mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.Var(sp1, ident, sp2) =>
+      WeededAst.Contract.Var(ident, mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.Ambiguous(sp1, qname, sp2) =>
+      WeededAst.Contract.Ambiguous(qname, mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.Tuple(sp1, elms, sp2) =>
+      traverse(elms.toList)(e => visitContract(e)) map (el => WeededAst.Contract.Tuple(el, mkSL(sp1, sp2)))
+
+    case ParsedAst.Contract.Record(sp1, fields, restOpt, sp2) => {
+      def buildRecord(base: WeededAst.Contract): Validation[WeededAst.Contract, WeederError] = {
+        fields.foldRight[Validation[WeededAst.Contract, WeederError]](base.toSuccess) {
+          case (ParsedAst.RecordFieldContract(ssp1, ident, t, ssp2), acc) =>
+            mapN(acc, visitContract(t)) {
+              case (acc, t) => WeededAst.Contract.RecordExtend(Name.mkField(ident), t, acc, mkSL(ssp1, ssp2))
+            }
+        }
+//        fields.foldRight(base) {
+//          case (ParsedAst.RecordFieldContract(ssp1, ident, t, ssp2), acc) =>
+//            visitContract(t) map (t => WeededAst.Contract.RecordExtend(Name.mkField(ident), t, acc, mkSL(ssp1, ssp2)))
+//        }
+      }
+
+      (fields, restOpt) match {
+        // Case 1: `{| r}` Polymorphic record with no fields. `r` must be a `Record` variable.
+        case (Nil, Some(ident)) => WeededAst.Contract.RecordGeneric(WeededAst.Contract.Var(ident, ident.loc), mkSL(sp1, sp2)).toSuccess
+        // Case 2: `{x: Int}` Nonpolymorphic record. Base must be an empty record.
+        case (_, None) => buildRecord(WeededAst.Contract.RecordEmpty(mkSL(sp1, sp2)))
+        // Case 3: `{x: Int | r}` Polymorphic record with field. `r` must be a `Record` variable.
+        case (_, Some(base)) => buildRecord(WeededAst.Contract.Var(base, base.loc))
+      }
+    }
+
+    case ParsedAst.Contract.Schema(sp1, predicates, restOpt, sp2) =>
+      def buildSchema(base: WeededAst.Contract): Validation[WeededAst.Contract, WeederError] = {
+        predicates.foldRight[Validation[WeededAst.Contract, WeederError]](base.toSuccess) {
+          case (ParsedAst.PredicateContract.PredicateWithAlias(ssp1, qname, targs, ssp2), acc) => {
+            val ts = targs match {
+              case None => Nil.toSuccess
+              case Some(xs) => traverse(xs)(visitContract)
+            }
+            mapN(acc, ts){ case (acc, ts) =>
+              WeededAst.Contract.SchemaExtendByAlias(qname, ts, acc, mkSL(ssp1, ssp2))
+            }
+          }
+
+          case (ParsedAst.PredicateContract.RelPredicateWithContracts(ssp1, name, ts, ssp2), acc) =>
+            mapN(acc, traverse(ts)(visitContract)) { case (acc, ts) =>
+              WeededAst.Contract.SchemaExtendByContracts(name, Ast.Denotation.Relational, ts, acc, mkSL(ssp1, ssp2))
+            }
+
+          case (ParsedAst.PredicateContract.LatPredicateWithContracts(ssp1, name, ts, tpe, ssp2), acc) =>
+            mapN(acc, traverse(ts)(visitContract), visitContract(tpe)) { case (acc, ts, tpe) =>
+              WeededAst.Contract.SchemaExtendByContracts(name, Ast.Denotation.Latticenal, ts ::: tpe :: Nil, acc, mkSL(ssp1, ssp2))
+            }
+        }
+      }
+
+      (predicates, restOpt) match {
+        // Case 1: `#{| r}` Polymorphic schema with no fields. `r` must be a `Schema` variable.
+        case (Nil, Some(ident)) => WeededAst.Contract.SchemaGeneric(WeededAst.Contract.Var(restOpt.get, restOpt.get.loc), mkSL(sp1, sp2)).toSuccess
+        // Case 2: `#{X(Int)}` Nonpolymorphic schema. Base must be an empty schema.
+        case (_, None) => buildSchema(WeededAst.Contract.SchemaEmpty(mkSL(sp1, sp2)))
+        // Case 3: `#{X(Int) | r}` Polymorphic schema with field. `r` must be a `Schema` variable.
+        case (_, Some(ident)) => buildSchema(WeededAst.Contract.Var(ident, mkSL(sp1, sp2)))
+      }
+
+    case ParsedAst.Contract.UnaryImpureArrow(tpe1, tpe2, sp2) =>
+      val loc = mkSL(leftMostSourcePosition(tpe1), sp2)
+      mapN(visitContract(tpe1), visitContract(tpe2)) { case (t1, t2) =>
+        val eff = WeededAst.Contract.False(loc)
+        mkContractArrow(t1, eff, t2, loc)
+      }
+
+    case ParsedAst.Contract.UnaryPolymorphicArrow(tpe1, tpe2, effOpt, sp2) =>
+      val loc = mkSL(leftMostSourcePosition(tpe1), sp2)
+      flatMapN(visitContract(tpe1), visitContract(tpe2)) { case (t1, t2) =>
+        val eff = effOpt match {
+          // NB: If there is no explicit effect then the arrow is pure.
+          case None => WeededAst.Contract.True(loc).toSuccess
+          case Some(f) => visitContract(f)
+        }
+        eff map (eff => mkContractArrow(t1, eff, t2, loc))
+      }
+
+    case ParsedAst.Contract.ImpureArrow(sp1, tparams, tresult, sp2) =>
+      mapN(traverse(tparams)(visitContract), visitContract(tresult)) { case (ts, tr) =>
+        val loc = mkSL(sp1, sp2)
+        val eff = WeededAst.Contract.False(loc)
+        mkCurriedContractArrow(ts, eff, tr, loc)
+      }
+
+    case ParsedAst.Contract.PolymorphicArrow(sp1, tparams, tresult, effOpt, sp2) =>
+      flatMapN(traverse(tparams)(visitContract), visitContract(tresult)) { case (ts, tr) =>
+        val loc = mkSL(sp1, sp2)
+        val eff = effOpt match {
+          // NB: If there is no explicit effect then the arrow is pure.
+          case None => WeededAst.Contract.True(loc).toSuccess
+          case Some(f) => visitContract(f)
+        }
+        eff map (eff => mkCurriedContractArrow(ts, eff, tr, loc))
+      }
+
+    case ParsedAst.Contract.Native(sp1, fqn, sp2) =>
+      WeededAst.Contract.Native(fqn.mkString("."), mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.Apply(t1, args, sp2) =>
+      // Curry the Contract arguments.
+      val sp1 = leftMostSourcePosition(t1)
+      args.foldLeft[Validation[WeededAst.Contract, WeederError]](visitContract(t1)) {
+        case (acc, t2) => mapN(acc, visitContract(t2)){
+          case (acc, t2) => WeededAst.Contract.Apply(acc, t2, mkSL(sp1, sp2))
+        }
+      }
+
+    case ParsedAst.Contract.True(sp1, sp2) =>
+      WeededAst.Contract.True(mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.False(sp1, sp2) =>
+      WeededAst.Contract.False(mkSL(sp1, sp2)).toSuccess
+
+    case ParsedAst.Contract.Not(sp1, tpe, sp2) =>
+      visitContract(tpe).map(t => WeededAst.Contract.Not(t, mkSL(sp1, sp2)))
+
+    case ParsedAst.Contract.And(tpe1, tpe2, sp2) =>
+      mapN(visitContract(tpe1), visitContract(tpe2)) { case (t1, t2) =>
+        val sp1 = leftMostSourcePosition(tpe1)
+        WeededAst.Contract.And(t1, t2, mkSL(sp1, sp2))
+      }
+
+    case ParsedAst.Contract.Or(tpe1, tpe2, sp2) =>
+      mapN(visitContract(tpe1), visitContract(tpe2)) { case (t1, t2) =>
+        val sp1 = leftMostSourcePosition(tpe1)
+        WeededAst.Contract.Or(t1, t2, mkSL(sp1, sp2))
+      }
+
+    case ParsedAst.Contract.Ascribe(tpe, kind, sp2) =>
+      visitContract(tpe) map (t => {
+        val sp1 = leftMostSourcePosition(tpe)
+        val k = visitKind(kind)
+        WeededAst.Contract.Ascribe(t, k, mkSL(sp1, sp2))
+      })
+  }
+
   /**
     * Returns an arrow type from `tpe1` to `tpe2` with effect `eff`.
     *
@@ -2007,6 +2152,9 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     */
   private def mkArrow(tpe1: WeededAst.Type, eff: WeededAst.Type, tpe2: WeededAst.Type, loc: SourceLocation): WeededAst.Type =
     WeededAst.Type.Arrow(List(tpe1), eff, tpe2, loc)
+
+  private def mkContractArrow(tpe1: WeededAst.Contract, eff: WeededAst.Contract, tpe2: WeededAst.Contract, loc: SourceLocation): WeededAst.Contract =
+    WeededAst.Contract.Arrow(List(tpe1), eff, tpe2, loc)
 
   /**
     * Returns a sequence of arrow types type from `tparams` to `tresult` where every arrow is pure except the last which has effect `eff`.
@@ -2016,6 +2164,11 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
   private def mkCurriedArrow(tparams: Seq[WeededAst.Type], eff: WeededAst.Type, tresult: WeededAst.Type, loc: SourceLocation): WeededAst.Type = {
     val base = mkArrow(tparams.last, eff, tresult, loc)
     tparams.init.foldRight(base)(mkArrow(_, WeededAst.Type.True(loc), _, loc))
+  }
+
+  private def mkCurriedContractArrow(tparams: Seq[WeededAst.Contract], eff: WeededAst.Contract, tresult: WeededAst.Contract, loc: SourceLocation): WeededAst.Contract = {
+    val base = mkContractArrow(tparams.last, eff, tresult, loc)
+    tparams.init.foldRight(base)(mkContractArrow(_, WeededAst.Contract.True(loc), _, loc))
   }
 
   /**
@@ -2371,6 +2524,33 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     case ParsedAst.Type.And(tpe1, _, _) => leftMostSourcePosition(tpe1)
     case ParsedAst.Type.Or(tpe1, _, _) => leftMostSourcePosition(tpe1)
     case ParsedAst.Type.Ascribe(tpe, _, _) => leftMostSourcePosition(tpe)
+  }
+
+  /**
+    * Returns the left most source position in the sub-tree of the contract `con`.
+    */
+  @tailrec
+  private def leftMostSourcePosition(con: ParsedAst.Contract): SourcePosition = con match {
+    case ParsedAst.Contract.WildCard(sp1, _) => sp1
+    case ParsedAst.Contract.WhiteList(sp1, _, _, _) => sp1
+    case ParsedAst.Contract.Unit(sp1, _) => sp1
+    case ParsedAst.Contract.Var(sp1, _, _) => sp1
+    case ParsedAst.Contract.Ambiguous(sp1, _, _) => sp1
+    case ParsedAst.Contract.Tuple(sp1, _, _) => sp1
+    case ParsedAst.Contract.Record(sp1, _, _, _) => sp1
+    case ParsedAst.Contract.Schema(sp1, _, _, _) => sp1
+    case ParsedAst.Contract.UnaryImpureArrow(tpe1, _, _) => leftMostSourcePosition(tpe1)
+    case ParsedAst.Contract.UnaryPolymorphicArrow(tpe1, _, _, _) => leftMostSourcePosition(tpe1)
+    case ParsedAst.Contract.ImpureArrow(sp1, _, _, _) => sp1
+    case ParsedAst.Contract.PolymorphicArrow(sp1, _, _, _, _) => sp1
+    case ParsedAst.Contract.Native(sp1, _, _) => sp1
+    case ParsedAst.Contract.Apply(tpe1, _, _) => leftMostSourcePosition(tpe1)
+    case ParsedAst.Contract.True(sp1, _) => sp1
+    case ParsedAst.Contract.False(sp1, _) => sp1
+    case ParsedAst.Contract.Not(sp1, _, _) => sp1
+    case ParsedAst.Contract.And(tpe1, _, _) => leftMostSourcePosition(tpe1)
+    case ParsedAst.Contract.Or(tpe1, _, _) => leftMostSourcePosition(tpe1)
+    case ParsedAst.Contract.Ascribe(tpe, _, _) => leftMostSourcePosition(tpe)
   }
 
   /**

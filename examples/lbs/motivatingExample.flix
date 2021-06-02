@@ -36,7 +36,7 @@ namespace OurCode {
         let f = x -> {(c <- x); ()};
         /// for access control we have to "trust" ourselves to not make this mistake
         /// let f = x -> (c <- x);
-        ThirdPartyProducerA.produce(f);
+        con( (Int, Array[{["Hej"]}[Int]]) -> {["A"]}[{["B"]}[Int]], ThirdPartyProducerA.produce(f));
         ThirdPartyProducerB.produce(f);
         ChannelLibrary.receive(c);
         0

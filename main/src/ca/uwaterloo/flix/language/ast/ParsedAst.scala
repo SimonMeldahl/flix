@@ -904,7 +904,9 @@ object ParsedAst {
       */
     case class Spawn(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
-    case class Con(sp1: SourcePosition, con: ParsedAst.ConRule, fun: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
+    case class Con(sp1: SourcePosition, con: ParsedAst.Contract, fun: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression {
+      println(con)
+    }
 
     /**
       * Lazy Expression.
@@ -1509,13 +1511,51 @@ object ParsedAst {
     */
   case class SelectChannelRule(ident: Name.Ident, chan: ParsedAst.Expression, exp: ParsedAst.Expression)
 
-  sealed trait ConRule
+  sealed trait Contract
 
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+  object Contract {
 
-  case class ConWhiteList(wl: ParsedAst.Expression) extends ConRule
+    case class WildCard(sp1: SourcePosition, sp2: SourcePosition) extends ParsedAst.Contract
 
-  case class ConBase(t: Type) extends ConRule
+    case class WhiteList(sp1: SourcePosition, exp: ParsedAst.Expression, contract: Contract, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Unit(sp1: SourcePosition, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Var(sp1: SourcePosition, ident: Name.Ident, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Ambiguous(sp1: SourcePosition, qname: Name.QName, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Tuple(sp1: SourcePosition, elms: Seq[ParsedAst.Contract], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Record(sp1: SourcePosition, fields: Seq[ParsedAst.RecordFieldContract], rest: Option[Name.Ident], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Schema(sp1: SourcePosition, predicates: Seq[ParsedAst.PredicateContract], rest: Option[Name.Ident], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class UnaryImpureArrow(tpe1: ParsedAst.Contract, tpe2: ParsedAst.Contract, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class UnaryPolymorphicArrow(tpe1: ParsedAst.Contract, tpe2: ParsedAst.Contract, eff: Option[ParsedAst.Contract], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class ImpureArrow(sp1: SourcePosition, tparams: Seq[ParsedAst.Contract], tresult: ParsedAst.Contract, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class PolymorphicArrow(sp1: SourcePosition, tparams: Seq[ParsedAst.Contract], tresult: ParsedAst.Contract, eff: Option[ParsedAst.Contract], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Native(sp1: SourcePosition, fqn: Seq[String], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Apply(base: ParsedAst.Contract, tparams: Seq[ParsedAst.Contract], sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class True(sp1: SourcePosition, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class False(sp1: SourcePosition, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Not(sp1: SourcePosition, tpe: ParsedAst.Contract, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class And(tpe1: ParsedAst.Contract, tpe2: ParsedAst.Contract, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Or(tpe1: ParsedAst.Contract, tpe2: ParsedAst.Contract, sp2: SourcePosition) extends ParsedAst.Contract
+
+    case class Ascribe(tpe: ParsedAst.Contract, kind: ParsedAst.Kind, sp2: SourcePosition) extends ParsedAst.Contract
+
+  }
 
   /**
     * Modifier.
@@ -1689,6 +1729,8 @@ object ParsedAst {
     */
   case class RecordFieldType(sp1: SourcePosition, field: Name.Ident, tpe: ParsedAst.Type, sp2: SourcePosition)
 
+  case class RecordFieldContract(sp1: SourcePosition, field: Name.Ident, tpe: ParsedAst.Contract, sp2: SourcePosition)
+
   /**
     * A common super-type for schema predicate types.
     */
@@ -1725,6 +1767,18 @@ object ParsedAst {
       * @param sp2  the position of the last character in the field.
       */
     case class LatPredicateWithTypes(sp1: SourcePosition, name: Name.Ident, tpes: Seq[ParsedAst.Type], tpe: ParsedAst.Type, sp2: SourcePosition) extends PredicateType
+
+  }
+
+  sealed trait PredicateContract
+
+  object PredicateContract {
+
+    case class PredicateWithAlias(sp1: SourcePosition, qname: Name.QName, targs: Option[Seq[ParsedAst.Contract]], sp2: SourcePosition) extends PredicateContract
+
+    case class RelPredicateWithContracts(sp1: SourcePosition, name: Name.Ident, tpes: Seq[ParsedAst.Contract], sp2: SourcePosition) extends PredicateContract
+
+    case class LatPredicateWithContracts(sp1: SourcePosition, name: Name.Ident, tpes: Seq[ParsedAst.Contract], tpe: ParsedAst.Contract, sp2: SourcePosition) extends PredicateContract
 
   }
 
