@@ -715,14 +715,14 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
   // Check type of contracts at runtime here
   def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef, con: Value.Con)(implicit loc: SourceLocation): AnyRef = (value, con) match {
-    // If wl=None then it was ["?"] and we should match it to the channels policy
     case (Value.True | Value.False, Value.ConBase(MonoType.Bool) | Value.ConWhiteList(None)) => value
     case (Value.Unit, Value.ConBase(MonoType.Unit) | Value.ConWhiteList(None)) => value
     case (Value.Int32(_), Value.ConBase(MonoType.Int32) | Value.ConWhiteList(None)) => value
     case (Value.Str(_), Value.ConBase(MonoType.Str) | Value.ConWhiteList(None)) => value
-    case (Value.Arr(_, t1), Value.ConBase(t2)) if t1 == t2 => value
-    case (_: Value.Arr, Value.ConWhiteList(None)) => value
+    case (Value.Arr(elms, t1), Value.ConBase(t2)) if t1 == t2 => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
+    case (Value.Arr(elms, t1), Value.ConWhiteList(None)) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
     case (c: Value.Channel, Value.ConWhiteList(wl@Some(_))) => Value.Guard(c, fromLabel, toLabel, wl)
+    // If wl=None then it was ["?"] and we should match it to the channels policy
     case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
     case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
