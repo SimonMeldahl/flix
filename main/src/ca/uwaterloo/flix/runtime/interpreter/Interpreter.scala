@@ -265,13 +265,11 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
       case Expression.GetChannel(exp, _, _) =>
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
-        val Value.Tuple(e :: fromLabel :: Nil) = c.get(currentLabel)
-        reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, Value.ConWhiteList(None))
+        val Value.Tuple(e :: fromLabel :: con :: Nil) = c.get(currentLabel)
+        reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[Value.Con])
 
-      case Expression.PutChannel(exp1, exp2, tpe, loc) =>
-        val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
-        val e2 = eval(exp2, env0, lenv0, root, currentLabel)
-        c.put(Value.Tuple(List(e2, currentLabel)), currentLabel)
+      case pc@Expression.PutChannel(exp1, exp2, tpe, loc) =>
+        evalPutChannel(pc, env0, lenv0, currentLabel, Value.ConWhiteList(None), root)
 
       case Expression.SelectChannel(rules, default, _, _) =>
         // Evaluate all Channel expressions
@@ -293,8 +291,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
         // The default was not chosen. Find the matching rule
         val selectedRule = rs.apply(selectChoice.branchNumber)
-        val Value.Tuple(e :: fromLabel :: Nil) = selectChoice.element
-        val channelOutput = reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, Value.ConWhiteList(None))
+        val Value.Tuple(e :: fromLabel :: con :: Nil) = selectChoice.element
+        val channelOutput = reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[Value.Con])
         // Bind the sym of the rule to the element from the selected channel
         val newEnv = env0 + (selectedRule._1.toString -> channelOutput)
         // Evaluate the expression of the selected rule
@@ -319,15 +317,6 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         }
 
         val contract = visitCon(con)
-        // version 1
-//        eval(fun, env0, lenv0, root, currentLabel) match {
-//          case v@Value.Closure(sym, _) =>
-//            // TODO(LBS): should be checked?
-//            //  if (sym.namespace == currentLabel) throw InternalRuntimeException(s"Cannot contract local functions ${v.sym} @$loc")
-//            reduceK(currentLabel, sym.namespace, v, contract)
-//          case _ => throw InternalRuntimeException(s"Can only have contract on functions @$loc")
-//        }
-        // version 2
         fun match {
           case Expression.ApplyDefTail(sym, args, tpe, loc) =>
             invokeDef(sym, args, env0, lenv0, root, currentLabel, contract)
@@ -335,6 +324,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
             invokeDef(sym, args, env0, lenv0, root, currentLabel, contract)
           case Expression.ApplySelfTail(sym, formals, actuals, tpe, loc) =>
             invokeDef(sym, actuals, env0, lenv0, root, currentLabel, contract)
+          case pc@Expression.PutChannel(exp1, exp2, tpe, loc) =>
+            evalPutChannel(pc, env0, lenv0, currentLabel, contract, root)
           case _ => throw InternalRuntimeException(s"Can only have contract on applications on other namespace functions @$loc")
         }
 
@@ -359,6 +350,14 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
       case Expression.K(exp, from, to, con, tpe, loc) => reduceK(from, to, eval(exp, env0, lenv0, root, from), con)
     }
+  }
+
+  private def evalPutChannel(exp: Expression.PutChannel, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], currentLabel: KLabel, con: Value.Con, root: Root)(implicit flix: Flix): AnyRef = {
+    val Expression.PutChannel(exp1, exp2, _, loc) = exp
+    implicit val locc: SourceLocation = loc
+    val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
+    val e2 = eval(exp2, env0, lenv0, root, currentLabel)
+    c.put(Value.Tuple(List(e2, currentLabel, con)), currentLabel)
   }
 
   /**

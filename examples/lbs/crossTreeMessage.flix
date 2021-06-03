@@ -15,7 +15,7 @@ namespace B {
     pub def transfer(channel: Channel[Channel[Int]]): Unit & Impure =
         let innerChannel = chan Int 10;
         innerChannel <- 42;
-        channel <- innerChannel;
+        con(["A", "C"], channel <- innerChannel);
         ()
 }
 
