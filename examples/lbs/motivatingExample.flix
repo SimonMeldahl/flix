@@ -36,8 +36,10 @@ namespace OurCode {
         let f = x -> {(c <- x); ()};
         /// for access control we have to "trust" ourselves to not make this mistake
         /// let f = x -> (c <- x);
-        ThirdPartyProducerA.produce(f);
-        ThirdPartyProducerB.produce(f);
+        spawn ThirdPartyProducerA.produce(f);
+        spawn ThirdPartyProducerB.produce(f);
+        import java.lang.Thread:sleep(Int64);
+        sleep(1000i64);
         ChannelLibrary.receive(c);
         0
 }

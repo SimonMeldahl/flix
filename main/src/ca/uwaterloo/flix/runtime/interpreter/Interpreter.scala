@@ -238,7 +238,13 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       case Expression.InvokeStaticMethod(method, args, tpe, loc) =>
         if (method.getName == "toString" && args.length == 1) {
           println(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int32].lit)
+          return Value.Unit
         }
+        if (method.getName == "sleep" && args.length == 1) {
+          Thread.sleep(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int64].lit)
+          return Value.Unit
+        }
+        println(method.getName, " is not implemented!!\n")
         Value.Unit //TODO
 
       case Expression.GetField(field, exp, tpe, loc) => Value.Unit //TODO

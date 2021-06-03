@@ -225,10 +225,10 @@ object Value {
             // Add our condition to all channels to get notified when a new element is added
             for (channel <- selectObjects) {
               channel match {
-                case (c: ChannelImpl, _) =>
+                case c: ChannelImpl =>
                   c.checkAccess(currentLabel)
                   c.c.addGetter(selectLock, condition)
-                case (g: Guard, _) =>
+                case g: Guard =>
                   g.checkAccess(currentLabel)
                   g.getChannel.c.addGetter(selectLock, condition)
               }
