@@ -263,18 +263,17 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         }
         Value.ChannelImpl(new JavaChannel(size), pols)
 
-      case Expression.GetChannel(exp, _, loc) =>
+      case Expression.GetChannel(exp, _, _) =>
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
-        val Value.Tuple(e :: cinner :: Nil) = c.get(currentLabel)
-        Value.Channel.reapply(c, cast2channel(cinner), e)
+        val Value.Tuple(e :: fromLabel :: Nil) = c.get(currentLabel)
+        reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, Value.ConWhiteList(None))
 
       case Expression.PutChannel(exp1, exp2, tpe, loc) =>
         val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
         val e2 = eval(exp2, env0, lenv0, root, currentLabel)
-        c.put(Value.Tuple(List(e2, c)), currentLabel)
+        c.put(Value.Tuple(List(e2, currentLabel)), currentLabel)
 
       case Expression.SelectChannel(rules, default, _, _) =>
-        // TODO(LBS): fix
         // Evaluate all Channel expressions
         val rs = rules.map { r =>
           (r.sym, eval(r.chan, env0, lenv0, root, currentLabel), r.exp)
@@ -294,9 +293,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
         // The default was not chosen. Find the matching rule
         val selectedRule = rs.apply(selectChoice.branchNumber)
-        val Value.Tuple(e :: refChannel :: Nil) = selectChoice.element
+        val Value.Tuple(e :: fromLabel :: Nil) = selectChoice.element
+        val channelOutput = reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, Value.ConWhiteList(None))
         // Bind the sym of the rule to the element from the selected channel
-        val newEnv = env0 + (selectedRule._1.toString -> Value.Channel.reapply(cast2channel(channelsArray(selectChoice.branchNumber)), cast2channel(refChannel), e))
+        val newEnv = env0 + (selectedRule._1.toString -> channelOutput)
         // Evaluate the expression of the selected rule
         eval(selectedRule._3, newEnv, lenv0, root, currentLabel)
 
