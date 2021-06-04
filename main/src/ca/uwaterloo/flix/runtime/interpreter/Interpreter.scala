@@ -730,6 +730,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
     case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
+    case (v, Value.ConWhiteList(None)) => throw InternalRuntimeException(s"Uncaught value case in reduce $v @$loc")
     case _ => throw InternalRuntimeException(s"Wrong types on contract $con @$loc")
   }
 
