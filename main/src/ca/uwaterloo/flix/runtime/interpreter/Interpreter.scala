@@ -79,15 +79,15 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         val clo = eval(exp, env0, lenv0, root, currentLabel)
         invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-      case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel, Value.ConWhiteList(None))
+      case Expression.ApplyDef(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
       case Expression.ApplyCloTail(exp, args, _, _) =>
         val clo = eval(exp, env0, lenv0, root, currentLabel)
         invokeClo(clo, args, env0, lenv0, root, currentLabel)
 
-      case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel, Value.ConWhiteList(None))
+      case Expression.ApplyDefTail(sym, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
-      case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel, Value.ConWhiteList(None))
+      case Expression.ApplySelfTail(sym, _, args, _, _) => invokeDef(sym, args, env0, lenv0, root, currentLabel)
 
       case Expression.Unary(sop, op, exp, _, _) =>
         evalUnary(sop, exp, env0, lenv0, root, currentLabel)
@@ -340,17 +340,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         }
 
         val contract = visitCon(con)
-        fun match {
-          case Expression.ApplyDefTail(sym, args, tpe, loc) =>
-            invokeDef(sym, args, env0, lenv0, root, currentLabel, contract)
-          case Expression.ApplyDef(sym, args, tpe, loc) =>
-            invokeDef(sym, args, env0, lenv0, root, currentLabel, contract)
-          case Expression.ApplySelfTail(sym, formals, actuals, tpe, loc) =>
-            invokeDef(sym, actuals, env0, lenv0, root, currentLabel, contract)
-          case pc@Expression.PutChannel(exp1, exp2, tpe, loc) =>
-            evalPutChannel(pc, env0, lenv0, currentLabel, contract, root)
-          case _ => throw InternalRuntimeException(s"Can only have contract on applications on other namespace functions @$loc")
-        }
+        val res = eval(fun, env0, lenv0, root, currentLabel)
+        reduceK(currentLabel, currentLabel, res, contract)
 
       case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
 
@@ -710,12 +701,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   /**
     * Invokes the given definition `sym` with the given arguments `args` under the given environment `env0`.
     */
-  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel, con: Value.Con)(implicit flix: Flix, loc: SourceLocation): AnyRef = {
-    val (c1, c2) = con match {
-      case Value.ConArrow(c1, c2) => (c1, c2)
-      case Value.ConWhiteList(None) => (Value.ConWhiteList(None), Value.ConWhiteList(None))
-      case _ => throw InternalRuntimeException(s"Wrong types on contract $con @$loc")
-    }
+  private def invokeDef(sym: Symbol.DefnSym, args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root, currentLabel: KLabel)(implicit flix: Flix, loc: SourceLocation): AnyRef = {
     // Lookup the definition.
     val defn = root.defs(sym)
 
@@ -725,7 +711,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     // Evaluate the arguments.
     val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a =>
-      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, c1) else a)
+      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, Value.ConWhiteList(None)) else a)
 
     // Construct the new environment by pairing the formal parameters with the actual arguments.
     val env = defn.formals.zip(as).foldLeft(Map.empty[String, AnyRef]) {
@@ -735,7 +721,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     // Evaluate the body expression under the new local variable environment and an empty label environment.
     val finalValue = eval(defn.exp, env, Map.empty, root, fromLabel)
     if (hasLabelChanged)
-      reduceK(fromLabel = fromLabel, toLabel = toLabel, finalValue, c2)
+      reduceK(fromLabel = fromLabel, toLabel = toLabel, finalValue, Value.ConWhiteList(None))
     else finalValue
   }
 

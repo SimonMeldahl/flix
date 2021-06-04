@@ -13,7 +13,7 @@ namespace TerminalPrinter {
 
 def main(_args: Array[String]): Int & Impure =
     let c = TerminalPrinter.messageChannel();
-    c <- "start";
+    c <- "start" <- "middle" <- "end";
     import java.lang.Thread:sleep(Int64);
     sleep(1000i64);
     0

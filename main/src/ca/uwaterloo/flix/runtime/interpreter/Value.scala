@@ -257,20 +257,20 @@ object Value {
 
   case class ChannelImpl(c: JavaChannel, pols: Policy) extends Channel {
     override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      println(s"get channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      println(s"get channel with no guard ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       c.get()
     }
 
     override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      println(s"tryget channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      println(s"tryget channel with no guard ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       c.tryGet()
     }
 
     override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = {
+      println(s"put channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      println(s"put channel with no guard ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       c.put(e)
       this
     }
@@ -284,30 +284,32 @@ object Value {
       case g: Guard => g.getChannel
     }
 
-    def getAllLabels(implicit loc: SourceLocation): List[(KLabel, KLabel)] = lit match {
-      case _: ChannelImpl => List((to, from))
-      case g: Guard => (to, from) :: g.getAllLabels
+    def getAllLabels: List[(KLabel, KLabel, Policy)] = lit match {
+      case _: ChannelImpl => List((to, from, pols))
+      case g: Guard => (to, from, pols) :: g.getAllLabels
     }
 
     override def toString: String = {
-      getAllLabels(SourceLocation.Unknown).map(l => s"${kLabelString(l._1)} <- ${kLabelString(l._2)}").mkString("[", ", ", "]")
+      getAllLabels.map(l =>
+        if (l._1 == l._2) s"<-${kLabelString(l._1)}-${polsString(l._3)}-"
+        else s"${kLabelString(l._1)} <-${polsString(l._3)}- ${kLabelString(l._2)}").mkString("[", ", ", "]")
     }
 
     override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      println(s"get channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      println(s"get channel with guard $toString ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       getChannel.c.get()
     }
 
     override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      println(s"tryget channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      println(s"tryget channel with guard $toString ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       getChannel.c.tryGet()
     }
 
     override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = {
+      println(s"put channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      println(s"put channel with guard $toString ${polsString(pols)} from ${kLabelString(currentLabel)} @$loc")
       getChannel.c.put(e)
       this
     }

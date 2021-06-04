@@ -7,8 +7,8 @@ namespace A {
 
 def main(_args: Array[String]): Int & Impure =
     let c = chan (Unit -> Channel[Int]) 100 restricted ["A"];
-    let innerc = chan Int 100 restricted [];
+    let innerc = chan Int 100;
     innerc <- 0 <- 0;
-    c <- (() -> innerc);
+    c <- (() -> con(["A"], innerc));
     A.f(c);
     <- innerc

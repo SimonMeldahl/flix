@@ -1325,9 +1325,8 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
 
         for {
           (conConstrs, _, _) <- visitCon(con)
-          (funConstrs, funTpe, _) <- visitExp(fun)
-          resultEff = Type.Impure
-        } yield (conConstrs ++ funConstrs, funTpe, resultEff)
+          (funConstrs, funTpe, funEff) <- visitExp(fun)
+        } yield (conConstrs ++ funConstrs, funTpe, funEff)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         //
