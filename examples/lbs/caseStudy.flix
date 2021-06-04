@@ -1,12 +1,12 @@
-use List.List;
-use ToString.ToString;
+use List.{range, foreach};
+use ToString.{toString};
 def main(_args: Array[String]): Int & Impure =
     let connectionChannel = chan Channel[String] 100 restricted ["Processor"];
     let resultChannel = chan String 0 restricted ["Processor"];
-    List.foreach(_ -> spawn Processor.start(connectionChannel, resultChannel), List.range(0, 5));
+    foreach(_ -> spawn Processor.start(connectionChannel, resultChannel), range(0, 5));
     let connectionStarter = c -> {con(["Processor"], connectionChannel <- c); ()};
-    List.foreach(_ -> spawn Producer.start(connectionStarter), List.range(0, 10));
-    List.foreach(_ -> println(<- resultChannel), List.range(0, 10));
+    foreach(_ -> spawn Producer.start(connectionStarter), range(0, 10));
+    foreach(_ -> println(<- resultChannel), range(0, 10));
     0
 
 namespace Processor {
@@ -15,7 +15,7 @@ namespace Processor {
             case sessionChannel <- connectionChannel =>
                 resultChannel <- listenAndBuild(sessionChannel, "");
                 start(connectionChannel, resultChannel)
-            case _ <- Timer.seconds(5i64) => ()
+            case _ <- con( Int64 -> ["Processor"], Timer.seconds(5i64)) => ()
         }
 
     def listenAndBuild(sessionChannel: Channel[String], acc: String): String & Impure =
@@ -24,17 +24,11 @@ namespace Processor {
 }
 
 namespace Producer {
-    def sendStrings(number: Int, c: Channel[String]): Unit & Impure =
-        if (number <= 0) () else {
-            c <- ToString.toString(number);
-            sendStrings(number-1, c)
-        }
-
-    pub def start(connectionStarter: Channel[String] -> Unit): Unit & Impure =
+    pub def start(connectionStarter: Channel[String] -> Unit & Impure): Unit & Impure =
         let sessionChannel = chan String 100;
         /// test con on given lambda
         connectionStarter(sessionChannel);
-        sendStrings(10, sessionChannel);
+        foreach(i -> {sessionChannel <- toString(i); ()}, range(0, 30));
         sessionChannel <- "CLOSE";
         ()
 }

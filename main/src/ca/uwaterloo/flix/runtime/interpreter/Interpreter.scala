@@ -233,27 +233,49 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         val arguments = values.toArray
         fromJava(constructor.newInstance(arguments: _*).asInstanceOf[AnyRef])
 
-      case Expression.InvokeMethod(method, exp, args, tpe, loc) => Value.Unit //TODO
+      case Expression.InvokeMethod(method, exp, args, tpe, loc) => {
+        if (method.getName == "println" && args.length == 1) {
+          println(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Str].lit)
+          return Value.Unit
+        }
+        if (method.getName == "concat") {
+          val v = (exp::args).map(a => cast2str(eval(a, env0, lenv0, root, currentLabel)))
+          return Value.Str(v.mkString(""))
+        }
+        throw InternalRuntimeException(method.getName + " is not implemented dynamic!!\n")
+      }
 
       case Expression.InvokeStaticMethod(method, args, tpe, loc) =>
         if (method.getName == "toString" && args.length == 1) {
-          println(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int32].lit)
-          return Value.Unit
+          return eval(args.head, env0, lenv0, root, currentLabel) match {
+            case Value.Int32(lit) => Value.Str(lit.toString)
+            case Value.Int64(lit) => Value.Str(lit.toString)
+            case ss@Value.Str(_) => ss
+            case Value.True => Value.Str("True")
+            case Value.False => Value.Str("False")
+            case Value.Unit => Value.Str("()")
+            case _ => throw InternalRuntimeException("Failed to call toString")
+          }
         }
         if (method.getName == "sleep" && args.length == 1) {
           Thread.sleep(eval(args.head, env0, lenv0, root, currentLabel).asInstanceOf[Value.Int64].lit)
           return Value.Unit
         }
-        println(method.getName, " is not implemented!!\n")
-        Value.Unit //TODO
+        throw InternalRuntimeException(method.getName + " is not implemented static!!\n")
 
-      case Expression.GetField(field, exp, tpe, loc) => Value.Unit //TODO
+      case Expression.GetField(field, exp, tpe, loc) =>
+        throw InternalRuntimeException(field.getName + " is not implemented!!\n")
 
-      case Expression.PutField(field, exp1, exp2, tpe, loc) => Value.Unit //TODO
+      case Expression.PutField(field, exp1, exp2, tpe, loc) =>
+        throw InternalRuntimeException(field.getName + " is not implemented!!\n")
 
-      case Expression.GetStaticField(field, tpe, loc) => Value.Unit //TODO
+      case Expression.GetStaticField(field, tpe, loc) =>
+        if (field.getName == "out") Value.Unit else {
+          throw InternalRuntimeException(field.getName + " is not implemented!!\n")
+        }
 
-      case Expression.PutStaticField(field, exp, tpe, loc) => Value.Unit //TODO
+      case Expression.PutStaticField(field, exp, tpe, loc) =>
+        throw InternalRuntimeException(field.getName + " is not implemented!!\n")
 
       case Expression.NewChannel(exp, pol, tpe, loc) =>
         val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
@@ -722,6 +744,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case (Value.True | Value.False, Value.ConBase(MonoType.Bool) | Value.ConWhiteList(None)) => value
     case (Value.Unit, Value.ConBase(MonoType.Unit) | Value.ConWhiteList(None)) => value
     case (Value.Int32(_), Value.ConBase(MonoType.Int32) | Value.ConWhiteList(None)) => value
+    case (Value.Int64(_), Value.ConBase(MonoType.Int64) | Value.ConWhiteList(None)) => value
     case (Value.Str(_), Value.ConBase(MonoType.Str) | Value.ConWhiteList(None)) => value
     case (Value.Arr(elms, t1), Value.ConBase(t2)) if t1 == t2 => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
     case (Value.Arr(elms, t1), Value.ConWhiteList(None)) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
@@ -730,7 +753,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
     case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
-    case (v, Value.ConWhiteList(None)) => throw InternalRuntimeException(s"Uncaught value case in reduce $v @$loc")
+    case (v, Value.ConWhiteList(None)) => v // TODO(LBS): This is not safe for values with channel inside
     case _ => throw InternalRuntimeException(s"Wrong types on contract $con @$loc")
   }
 
