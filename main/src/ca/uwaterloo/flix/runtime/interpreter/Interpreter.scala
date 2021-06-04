@@ -259,7 +259,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
         val pols = pol map { value =>
           val Value.Arr(elms, _) = cast2array(eval(value, env0, lenv0, root, currentLabel))
-          elms.map(cast2str(_).split("\\.").toList).toList
+          elms.map(cast2str(_).split('.').toList).toList.map(f => if (f == List("<main>")) List() else f)
         }
         Value.ChannelImpl(new JavaChannel(size), pols)
 
@@ -309,7 +309,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         def visitCon(con: ConRule): Value.Con = con match {
           case ConArrow(c1, c2) => Value.ConArrow(visitCon(c1), visitCon(c2))
           case ConWhiteList(wl) =>
-            val whiteList = cast2array(eval(wl, env0, lenv0, root, currentLabel)).elms.map(cast2str(_).split('.').toList).toList
+            val wll = cast2array(eval(wl, env0, lenv0, root, currentLabel)).elms.map(cast2str(_).split('.').toList).toList
+            val whiteList = wll.map(f => if (f == List("<main>")) List() else f)
             // ["?"] matches the whitelist
             if (whiteList == List(List("?"))) Value.ConWhiteList(None)
             else Value.ConWhiteList(Some(whiteList))
