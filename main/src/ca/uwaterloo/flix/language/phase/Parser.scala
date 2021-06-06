@@ -1364,7 +1364,7 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def Primary: Rule1[ParsedAst.Contract] = rule {
-      Arrow | Tuple | Record | SchemaContract | WildCard | Native | True | False | Pure | Impure | Not | WhiteList | Var | Ambiguous
+      Arrow | Tuple | WhiteList | Record | SchemaContract | WildCard | Native | True | False | Pure | Impure | Not | Var | Ambiguous
     }
 
     def Arrow: Rule1[ParsedAst.Contract] = {
@@ -1456,7 +1456,7 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def WhiteList: Rule1[ParsedAst.Contract] = rule {
-      SP ~ "{" ~ optWS ~ Expression ~ optWS ~ "}" ~ "[" ~ optWS ~ Contract ~ optWS ~ "]" ~ SP ~> ParsedAst.Contract.WhiteList
+      SP ~ "{{" ~ optWS ~ Expression ~ optWS ~ "}}" ~ "[" ~ optWS ~ Contract ~ optWS ~ "]" ~ SP ~> ParsedAst.Contract.WhiteList
     }
 
     def Var: Rule1[ParsedAst.Contract] = rule {

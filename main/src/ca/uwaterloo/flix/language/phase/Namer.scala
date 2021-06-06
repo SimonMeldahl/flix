@@ -851,19 +851,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       }
 
     case WeededAst.Expression.Con(con, fun, loc) =>
-      def visitCon(con: WeededAst.ConRule): Validation[NamedAst.ConRule, NameError] = con match {
-        case WeededAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
-          (c1, c2) => NamedAst.ConArrow(c1, c2)
-        }
-        case WeededAst.ConWhiteList(wl) => visitExp(wl, env0, uenv0, tenv0) map {
-          wl => NamedAst.ConWhiteList(wl)
-        }
-        case WeededAst.ConBase(t) => visitType(t, uenv0, tenv0) map {
-          t => NamedAst.ConBase(t)
-        }
-      }
-
-      mapN(visitCon(con), visitExp(fun, env0, uenv0, tenv0)) {
+      mapN(visitContract(con, env0, uenv0, tenv0), visitExp(fun, env0, uenv0, tenv0)) {
         (con, fun) => NamedAst.Expression.Con(con, fun, loc)
       }
 
@@ -1191,6 +1179,145 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       visitType(tpe, uenv0, tenv0)
   }
 
+  private def visitContract(con: WeededAst.Contract, env0: Map[String, Symbol.VarSym], uenv0: UseEnv, tenv0: Map[String, Type.Var])(implicit flix: Flix): Validation[NamedAst.Contract, NameError] = con match {
+
+    case WeededAst.Contract.WildCard(loc) => NamedAst.Contract.WildCard(loc).toSuccess
+
+    case WeededAst.Contract.WhiteList(exp, contract, loc) =>
+      mapN(visitExp(exp, env0, uenv0, tenv0), visitContract(contract, env0, uenv0, tenv0)) {
+        case (e, con) => NamedAst.Contract.WhiteList(e, con, loc)
+      }
+
+    case WeededAst.Contract.Unit(loc) => NamedAst.Contract.Unit(loc).toSuccess
+
+    case WeededAst.Contract.Var(ident, loc) =>
+      //
+      // Check for [[NameError.SuspiciousContractVarName]].
+      //
+      if (isSuspiciousTypeVarName(ident.name)) {
+        NameError.SuspiciousTypeVarName(ident.name, loc).toFailure
+      } else if (ident.isWild) {
+        // Wild idents will not be in the environment. Create a tvar instead.
+        NamedAst.Contract.Var(Type.freshVar(Kind.freshVar()), loc).toSuccess
+      } else {
+        tenv0.get(ident.name) match {
+          case None => NameError.UndefinedTypeVar(ident.name, loc).toFailure
+          case Some(tvar) => NamedAst.Contract.Var(tvar, loc).toSuccess
+        }
+      }
+
+    case WeededAst.Contract.Ambiguous(qname, loc) =>
+      if (qname.isUnqualified) {
+        val name = qname.ident.name
+        // Disambiguate the qname.
+        (tenv0.get(name), uenv0.typesAndClasses.get(name)) match {
+          case (None, None) =>
+            // Case 1: the name is top-level Contract.
+            NamedAst.Contract.Ambiguous(qname, loc).toSuccess
+
+          case (Some(tvar), None) =>
+            // Case 2: the name is a Contract variable.
+            NamedAst.Contract.Var(tvar, loc).toSuccess
+
+          case (None, Some(actualQName)) =>
+            // Case 3: the name is a use.
+            NamedAst.Contract.Ambiguous(actualQName, loc).toSuccess
+
+          case (Some(tvar), Some(qname)) =>
+            // Case 4: the name is ambiguous.
+            throw InternalCompilerException(s"Unexpected ambiguous Type.")
+        }
+      }
+      else
+        NamedAst.Contract.Ambiguous(qname, loc).toSuccess
+
+    case WeededAst.Contract.Tuple(elms, loc) =>
+      mapN(traverse(elms)(visitContract(_, env0, uenv0, tenv0))) {
+        case ts => NamedAst.Contract.Tuple(ts, loc)
+      }
+
+    case WeededAst.Contract.RecordEmpty(loc) =>
+      NamedAst.Contract.RecordEmpty(loc).toSuccess
+
+    case WeededAst.Contract.RecordExtend(field, value, rest, loc) =>
+      mapN(visitContract(value, env0, uenv0, tenv0), visitContract(rest, env0, uenv0, tenv0)) {
+        case (t, r) => NamedAst.Contract.RecordExtend(field, t, r, loc)
+      }
+
+    case WeededAst.Contract.RecordGeneric(tvar, loc) =>
+      visitContract(tvar, env0, uenv0, tenv0)
+
+    case WeededAst.Contract.SchemaEmpty(loc) =>
+      NamedAst.Contract.SchemaEmpty(loc).toSuccess
+
+    case WeededAst.Contract.SchemaExtendByAlias(qname, targs, rest, loc) =>
+      // Disambiguate the qname.
+      val name = if (qname.isUnqualified) {
+        uenv0.typesAndClasses.getOrElse(qname.ident.name, qname)
+      } else {
+        qname
+      }
+
+      mapN(traverse(targs)(visitContract(_, env0, uenv0, tenv0)), visitContract(rest, env0, uenv0, tenv0)) {
+        case (ts, r) => NamedAst.Contract.SchemaExtendWithAlias(name, ts, r, loc)
+      }
+
+    case WeededAst.Contract.SchemaExtendByContracts(ident, den, tpes, rest, loc) =>
+      mapN(traverse(tpes)(visitContract(_, env0, uenv0, tenv0)), visitContract(rest, env0, uenv0, tenv0)) {
+        case (ts, r) => NamedAst.Contract.SchemaExtendWithContracts(ident, den, ts, r, loc)
+      }
+
+    case WeededAst.Contract.SchemaGeneric(tvar, loc) =>
+      visitContract(tvar, env0, uenv0, tenv0)
+
+    case WeededAst.Contract.Relation(tpes, loc) =>
+      mapN(traverse(tpes)(visitContract(_, env0, uenv0, tenv0))) {
+        case ts => NamedAst.Contract.Relation(ts, loc)
+      }
+
+    case WeededAst.Contract.Lattice(tpes, loc) =>
+      mapN(traverse(tpes)(visitContract(_, env0, uenv0, tenv0))) {
+        case ts => NamedAst.Contract.Lattice(ts, loc)
+      }
+
+    case WeededAst.Contract.Native(fqn, loc) =>
+      NamedAst.Contract.Native(fqn, loc).toSuccess
+
+    case WeededAst.Contract.Arrow(tparams, eff, tresult, loc) =>
+      mapN(traverse(tparams)(visitContract(_, env0, uenv0, tenv0)), visitContract(eff, env0, uenv0, tenv0), visitContract(tresult, env0, uenv0, tenv0)) {
+        case (ts, f, t) => NamedAst.Contract.Arrow(ts, f, t, loc)
+      }
+
+    case WeededAst.Contract.Apply(tpe1, tpe2, loc) =>
+      mapN(visitContract(tpe1, env0, uenv0, tenv0), visitContract(tpe2, env0, uenv0, tenv0)) {
+        case (t1, t2) => NamedAst.Contract.Apply(t1, t2, loc)
+      }
+
+    case WeededAst.Contract.True(loc) =>
+      NamedAst.Contract.True(loc).toSuccess
+
+    case WeededAst.Contract.False(loc) =>
+      NamedAst.Contract.False(loc).toSuccess
+
+    case WeededAst.Contract.Not(tpe, loc) =>
+      mapN(visitContract(tpe, env0, uenv0, tenv0)) {
+        case t => NamedAst.Contract.Not(t, loc)
+      }
+
+    case WeededAst.Contract.And(tpe1, tpe2, loc) =>
+      mapN(visitContract(tpe1, env0, uenv0, tenv0), visitContract(tpe2, env0, uenv0, tenv0)) {
+        case (t1, t2) => NamedAst.Contract.And(t1, t2, loc)
+      }
+
+    case WeededAst.Contract.Or(tpe1, tpe2, loc) =>
+      mapN(visitContract(tpe1, env0, uenv0, tenv0), visitContract(tpe2, env0, uenv0, tenv0)) {
+        case (t1, t2) => NamedAst.Contract.Or(t1, t2, loc)
+      }
+
+    case WeededAst.Contract.Ascribe(tpe, kind, loc) =>
+      visitContract(tpe, env0, uenv0, tenv0)
+  }
+
   /**
     * Returns `true` if the given string `s` is a suspicious type variable name.
     */
@@ -1293,12 +1420,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       rulesFreeVars ++ defaultFreeVars
     case WeededAst.Expression.Spawn(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Con(con, fun, loc) =>
-      def freeVarsCons(con: WeededAst.ConRule): List[Name.Ident] = con match {
-        case WeededAst.ConArrow(c1, c2) => freeVarsCons(c1) ++ freeVarsCons(c2)
-        case WeededAst.ConWhiteList(wl) => freeVars(wl)
-        case WeededAst.ConBase(t) => freeVars(t)
-      }
-      freeVarsCons(con) ++ freeVars(fun)
+      freeVarsContract(con) ++ freeVars(fun)
     case WeededAst.Expression.Lazy(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Force(exp, loc) => freeVars(exp)
     case WeededAst.Expression.FixpointConstraintSet(cs, loc) => cs.flatMap(freeVarsConstraint)
@@ -1379,6 +1501,33 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     case WeededAst.Type.And(tpe1, tpe2, loc) => freeVars(tpe1) ++ freeVars(tpe2)
     case WeededAst.Type.Or(tpe1, tpe2, loc) => freeVars(tpe1) ++ freeVars(tpe2)
     case WeededAst.Type.Ascribe(tpe, _, _) => freeVars(tpe)
+  }
+
+  private def freeVarsContract(tpe0: WeededAst.Contract): List[Name.Ident] = tpe0 match {
+    case WeededAst.Contract.WildCard(loc) => Nil
+    case WeededAst.Contract.WhiteList(exp, contract, loc) => freeVars(exp) ::: freeVarsContract(contract)
+    case WeededAst.Contract.Var(ident, loc) => ident :: Nil
+    case WeededAst.Contract.Ambiguous(qname, loc) => Nil
+    case WeededAst.Contract.Unit(loc) => Nil
+    case WeededAst.Contract.Tuple(elms, loc) => elms.flatMap(freeVarsContract)
+    case WeededAst.Contract.RecordEmpty(loc) => Nil
+    case WeededAst.Contract.RecordExtend(l, t, r, loc) => freeVarsContract(t) ::: freeVarsContract(r)
+    case WeededAst.Contract.RecordGeneric(t, loc) => freeVarsContract(t)
+    case WeededAst.Contract.SchemaEmpty(loc) => Nil
+    case WeededAst.Contract.SchemaExtendByContracts(_, _, ts, r, loc) => ts.flatMap(freeVarsContract) ::: freeVarsContract(r)
+    case WeededAst.Contract.SchemaExtendByAlias(_, ts, r, _) => ts.flatMap(freeVarsContract) ::: freeVarsContract(r)
+    case WeededAst.Contract.SchemaGeneric(t, loc) => freeVarsContract(t)
+    case WeededAst.Contract.Relation(ts, loc) => ts.flatMap(freeVarsContract)
+    case WeededAst.Contract.Lattice(ts, loc) => ts.flatMap(freeVarsContract)
+    case WeededAst.Contract.Native(fqm, loc) => Nil
+    case WeededAst.Contract.Arrow(tparams, eff, tresult, loc) => tparams.flatMap(freeVarsContract) ::: freeVarsContract(eff) ::: freeVarsContract(tresult)
+    case WeededAst.Contract.Apply(tpe1, tpe2, loc) => freeVarsContract(tpe1) ++ freeVarsContract(tpe2)
+    case WeededAst.Contract.True(loc) => Nil
+    case WeededAst.Contract.False(loc) => Nil
+    case WeededAst.Contract.Not(tpe, loc) => freeVarsContract(tpe)
+    case WeededAst.Contract.And(tpe1, tpe2, loc) => freeVarsContract(tpe1) ++ freeVarsContract(tpe2)
+    case WeededAst.Contract.Or(tpe1, tpe2, loc) => freeVarsContract(tpe1) ++ freeVarsContract(tpe2)
+    case WeededAst.Contract.Ascribe(tpe, _, _) => freeVarsContract(tpe)
   }
 
   /**

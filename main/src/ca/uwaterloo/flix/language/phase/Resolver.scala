@@ -1450,6 +1450,166 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
 
   }
 
+  def lookupContract(tpe0: NamedAst.Contract, ns0: Name.NName, root: NamedAst.Root)(implicit recursionDepth: Int = 0): Validation[Contract, ResolutionError] = tpe0 match {
+    case NamedAst.Contract.Var(tvar, loc) => tvar.toSuccess
+
+    case NamedAst.Contract.Unit(loc) => Contract.mkUnit(loc).toSuccess
+
+    case NamedAst.Contract.Ambiguous(qname, loc) if qname.isUnqualified => qname.ident.name match {
+      // Basic Contracts
+      case "Unit" => Contract.mkUnit(loc).toSuccess
+      case "Null" => Contract.mkNull(loc).toSuccess
+      case "Bool" => Contract.mkBool(loc).toSuccess
+      case "Char" => Contract.mkChar(loc).toSuccess
+      case "Float" => Contract.mkFloat64(loc).toSuccess
+      case "Float32" => Contract.mkFloat32(loc).toSuccess
+      case "Float64" => Contract.mkFloat64(loc).toSuccess
+      case "Int" => Contract.mkInt32(loc).toSuccess
+      case "Int8" => Contract.mkInt8(loc).toSuccess
+      case "Int16" => Contract.mkInt16(loc).toSuccess
+      case "Int32" => Contract.mkInt32(loc).toSuccess
+      case "Int64" => Contract.mkInt64(loc).toSuccess
+      case "BigInt" => Contract.mkBigInt(loc).toSuccess
+      case "String" => Contract.mkString(loc).toSuccess
+      case "Array" => Contract.mkArray(loc).toSuccess
+      case "Channel" => Contract.mkChannel(loc).toSuccess
+      case "Lazy" => Contract.mkLazy(loc).toSuccess
+      case "Ref" => Contract.mkRef(loc).toSuccess
+
+      // Disambiguate type.
+      case typeName =>
+        (lookupEnum(qname, ns0, root), lookupContractAlias(qname, ns0, root)) match {
+          // Case 1: Not Found.
+          case (None, None) => ResolutionError.UndefinedContract(qname, ns0, loc).toFailure
+
+          // Case 2: Enum.
+          case (Some(enum), None) => getEnumContractIfAccessible(enum, ns0, loc)
+
+          // Case 3: ContractAlias.
+          case (None, Some(typealias)) => getContractAliasIfAccessible(typealias, ns0, root, loc)
+
+          // Case 4: Errors.
+          case (_, _) => throw InternalCompilerException("Unexpected ambiguity: Duplicate types / classes should have been resolved.")
+        }
+    }
+
+    case NamedAst.Contract.Ambiguous(qname, loc) =>
+      // Disambiguate type.
+      (lookupEnum(qname, ns0, root), lookupContractAlias(qname, ns0, root)) match {
+        case (None, None) => ResolutionError.UndefinedContract(qname, ns0, loc).toFailure
+        case (Some(enumDecl), None) => getEnumContractIfAccessible(enumDecl, ns0, loc)
+        case (None, Some(typeAliasDecl)) => getContractAliasIfAccessible(typeAliasDecl, ns0, root, loc)
+        case (Some(enumDecl), Some(typeAliasDecl)) =>
+          val locs = enumDecl.loc :: typeAliasDecl.loc :: Nil
+          ResolutionError.AmbiguousContract(qname.ident.name, ns0, locs, loc).toFailure
+      }
+
+    case NamedAst.Contract.Enum(sym, kind, loc) =>
+      Contract.mkEnum(sym, kind, loc).toSuccess
+
+    case NamedAst.Contract.Tuple(elms0, loc) =>
+      for {
+        elms <- traverse(elms0)(tpe => lookupContract(tpe, ns0, root))
+        tup <- mkTuple(elms, loc)
+      } yield tup
+
+    case NamedAst.Contract.RecordEmpty(loc) =>
+      Contract.RecordEmpty.toSuccess
+
+    case NamedAst.Contract.RecordExtend(field, value, rest, loc) =>
+      for {
+        v <- lookupContract(value, ns0, root)
+        r <- lookupContract(rest, ns0, root)
+        rec <- mkRecordExtend(field, v, r, loc)
+      } yield rec
+
+    case NamedAst.Contract.SchemaEmpty(loc) =>
+      Contract.SchemaEmpty.toSuccess
+
+    case NamedAst.Contract.SchemaExtendWithAlias(qname, targs, rest, loc) =>
+      // Lookup the type alias.
+      lookupContractAlias(qname, ns0, root) match {
+        case None =>
+          // Case 1: The type alias was not found. Report an error.
+          ResolutionError.UndefinedName(qname, ns0, loc).toFailure
+        case Some(typealias) =>
+          // Case 2: The type alias was found. Use it.
+          for {
+            t <- getContractAliasIfAccessible(typealias, ns0, root, loc)
+            ts <- traverse(targs)(lookupContract(_, ns0, root))
+            r <- lookupContract(rest, ns0, root)
+            app <- mkApply(t, ts, loc)
+            tpe <- Contract.simplify(app).toSuccess[Contract, ResolutionError]
+            schema <- mkSchemaExtend(Name.mkPred(qname.ident), tpe, r, loc)
+          } yield schema
+      }
+
+    case NamedAst.Contract.SchemaExtendWithContracts(ident, den, tpes, rest, loc) =>
+      for {
+        ts <- traverse(tpes)(lookupContract(_, ns0, root))
+        r <- lookupContract(rest, ns0, root)
+        pred <- mkPredicate(den, ts, loc)
+        schema <- mkSchemaExtend(Name.mkPred(ident), pred, r, loc)
+      } yield schema
+
+    case NamedAst.Contract.Relation(tpes, loc) =>
+      for {
+        ts <- traverse(tpes)(lookupContract(_, ns0, root))
+        rel <- mkRelation(ts, loc)
+      } yield rel
+
+    case NamedAst.Contract.Lattice(tpes, loc) =>
+      for {
+        ts <- traverse(tpes)(lookupContract(_, ns0, root))
+        lat <- mkLattice(ts, loc)
+      } yield lat
+
+    case NamedAst.Contract.Native(fqn, loc) =>
+      fqn match {
+        case "java.math.BigInteger" => Contract.BigInt.toSuccess
+        case "java.lang.String" => Contract.Str.toSuccess
+        case _ => lookupJvmClass(fqn, loc) map {
+          case clazz => Contract.mkNative(clazz)
+        }
+      }
+
+    case NamedAst.Contract.Arrow(tparams0, eff0, tresult0, loc) =>
+      for {
+        tparams <- traverse(tparams0)(lookupContract(_, ns0, root))
+        tresult <- lookupContract(tresult0, ns0, root)
+        eff <- lookupContract(eff0, ns0, root)
+      } yield Contract.mkUncurriedArrowWithEffect(tparams, eff, tresult) // TODO lift this once Contract.Arrow effect is moved
+
+    case NamedAst.Contract.Apply(base0, targ0, loc) =>
+      for {
+        tpe1 <- lookupContract(base0, ns0, root)
+        tpe2 <- lookupContract(targ0, ns0, root)
+        app <- mkApply(tpe1, tpe2, loc)
+      } yield Contract.simplify(app)
+
+    case NamedAst.Contract.True(loc) =>
+      Contract.True.toSuccess
+
+    case NamedAst.Contract.False(loc) =>
+      Contract.False.toSuccess
+
+    case NamedAst.Contract.Not(tpe, loc) =>
+      flatMapN(lookupContract(tpe, ns0, root)) {
+        case t => mkNot(t, loc)
+      }
+
+    case NamedAst.Contract.And(tpe1, tpe2, loc) =>
+      flatMapN(lookupContract(tpe1, ns0, root), lookupContract(tpe2, ns0, root)) {
+        case (t1, t2) => mkAnd(t1, t2, loc)
+      }
+
+    case NamedAst.Contract.Or(tpe1, tpe2, loc) =>
+      flatMapN(lookupContract(tpe1, ns0, root), lookupContract(tpe2, ns0, root)) {
+        case (t1, t2) => mkOr(t1, t2, loc)
+      }
+
+  }
+
   /**
     * Optionally returns the enum with the given `name` in the given namespace `ns0`.
     */

@@ -188,7 +188,7 @@ object NamedAst {
 
     case class Spawn(exp: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
-    case class Con(con: NamedAst.ConRule, fun: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
+    case class Con(con: NamedAst.Contract, fun: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
     case class Lazy(exp: NamedAst.Expression, loc: SourceLocation) extends NamedAst.Expression
 
@@ -368,14 +368,55 @@ object NamedAst {
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: NamedAst.Expression, exp: NamedAst.Expression)
 
-  sealed trait ConRule
+  sealed trait Contract
 
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
+  object Contract {
 
-  case class ConWhiteList(wl: NamedAst.Expression) extends ConRule
+    case class WildCard(loc: SourceLocation) extends NamedAst.Contract
 
-  case class ConBase(t: Type) extends ConRule
+    case class WhiteList(exp: NamedAst.Expression, contract: Contract, loc: SourceLocation) extends NamedAst.Contract
 
+    case class Var(tpe: ast.Type.Var, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Ambiguous(name: Name.QName, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Unit(loc: SourceLocation) extends NamedAst.Contract
+
+    case class Enum(name: Symbol.EnumSym, kind: Kind, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Tuple(elms: List[NamedAst.Contract], loc: SourceLocation) extends NamedAst.Contract
+
+    case class RecordEmpty(loc: SourceLocation) extends NamedAst.Contract
+
+    case class RecordExtend(field: Name.Field, tpe: NamedAst.Contract, rest: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class SchemaEmpty(loc: SourceLocation) extends NamedAst.Contract
+
+    case class SchemaExtendWithAlias(qname: Name.QName, targs: List[NamedAst.Contract], rest: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class SchemaExtendWithContracts(ident: Name.Ident, den: Ast.Denotation, tpes: List[NamedAst.Contract], rest: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Native(fqn: String, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Relation(tpes: List[NamedAst.Contract], loc: SourceLocation) extends NamedAst.Contract
+
+    case class Lattice(tpes: List[NamedAst.Contract], loc: SourceLocation) extends NamedAst.Contract
+
+    case class Arrow(tparams: List[NamedAst.Contract], eff: NamedAst.Contract, tresult: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Apply(tpe1: NamedAst.Contract, tpe2: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class True(loc: SourceLocation) extends NamedAst.Contract
+
+    case class False(loc: SourceLocation) extends NamedAst.Contract
+
+    case class Not(tpe: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class And(tpe1: NamedAst.Contract, tpe2: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+    case class Or(tpe1: NamedAst.Contract, tpe2: NamedAst.Contract, loc: SourceLocation) extends NamedAst.Contract
+
+  }
 
   case class TypeParam(name: Name.Ident, tpe: ast.Type.Var, loc: SourceLocation)
 
