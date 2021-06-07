@@ -241,8 +241,7 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
 
       case TypedAst.Expression.NewChannel(exp, pol, tpe, eff, loc) =>
         val e = visitExp(exp)
-        val p = pol.map(visitExp)
-        SimplifiedAst.Expression.NewChannel(e, p, tpe, loc)
+        SimplifiedAst.Expression.NewChannel(e, pol, tpe, loc)
 
       case TypedAst.Expression.GetChannel(exp, tpe, eff, loc) =>
         val e = visitExp(exp)
@@ -273,14 +272,8 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         SimplifiedAst.Expression.Spawn(lambdaExp, lambdaTyp, loc)
 
       case TypedAst.Expression.Con(con, fun, tpe, _, loc) =>
-        def visitCon(con: TypedAst.ConRule): SimplifiedAst.ConRule = con match {
-          case TypedAst.ConArrow(c1, c2) => SimplifiedAst.ConArrow(visitCon(c1), visitCon(c2))
-          case TypedAst.ConWhiteList(wl) => SimplifiedAst.ConWhiteList(visitExp(wl))
-          case TypedAst.ConBase(t) => SimplifiedAst.ConBase(t)
-        }
         val c = visitExp(fun)
-        val conValue = visitCon(con)
-        SimplifiedAst.Expression.Con(conValue, c, tpe, loc)
+        SimplifiedAst.Expression.Con(con, c, tpe, loc)
 
       case TypedAst.Expression.Lazy(exp, tpe, loc) =>
         // Wrap the expression in a closure: () -> tpe & Pure
@@ -976,8 +969,7 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
 
       case SimplifiedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        val p = pol.map(visitExp)
-        SimplifiedAst.Expression.NewChannel(e, p, tpe, loc)
+        SimplifiedAst.Expression.NewChannel(e, pol, tpe, loc)
 
       case SimplifiedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)
@@ -1005,14 +997,8 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         SimplifiedAst.Expression.Spawn(e, tpe, loc)
 
       case SimplifiedAst.Expression.Con(con, fun, tpe, loc) =>
-        def visitCon(con: SimplifiedAst.ConRule): SimplifiedAst.ConRule = con match {
-          case SimplifiedAst.ConArrow(c1, c2) => SimplifiedAst.ConArrow(visitCon(c1), visitCon(c2))
-          case SimplifiedAst.ConWhiteList(wl) => SimplifiedAst.ConWhiteList(visitExp(wl))
-          case SimplifiedAst.ConBase(t) => SimplifiedAst.ConBase(t)
-        }
         val e = visitExp(fun)
-        val conVal = visitCon(con)
-        SimplifiedAst.Expression.Con(conVal, e, tpe, loc)
+        SimplifiedAst.Expression.Con(con, e, tpe, loc)
 
       case SimplifiedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)

@@ -186,7 +186,7 @@ object SimplifiedAst {
 
     case class PutStaticField(field: Field, exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
-    case class NewChannel(exp: SimplifiedAst.Expression, policy: Option[SimplifiedAst.Expression], tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
+    case class NewChannel(exp: SimplifiedAst.Expression, policy: Option[TypeConstructor.WhiteList], tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
     case class GetChannel(exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
@@ -196,7 +196,7 @@ object SimplifiedAst {
 
     case class Spawn(exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
-    case class Con(con: SimplifiedAst.ConRule, fun: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
+    case class Con(con: Type, fun: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
     case class Lazy(exp: SimplifiedAst.Expression, tpe: Type, loc: SourceLocation) extends SimplifiedAst.Expression
 
@@ -209,14 +209,6 @@ object SimplifiedAst {
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: SimplifiedAst.Expression, exp: SimplifiedAst.Expression)
-
-  sealed trait ConRule
-
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
-
-  case class ConWhiteList(wl: SimplifiedAst.Expression) extends ConRule
-
-  case class ConBase(t: Type) extends ConRule
 
   case class Case(sym: Symbol.EnumSym, tag: Name.Tag, tpeDeprecated: Type, loc: SourceLocation)
 

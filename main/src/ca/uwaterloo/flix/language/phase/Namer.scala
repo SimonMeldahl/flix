@@ -803,8 +803,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
 
     case WeededAst.Expression.NewChannel(exp, policy, tpe, loc) =>
       val pol = policy match {
-        case Some(pol) => visitExp(pol, env0, uenv0, tenv0) map {
-          pol => Some(pol)
+        case Some(pol) => visitType(pol, uenv0, tenv0) map {
+          pol => Some(pol.asInstanceOf[NamedAst.Type.WhiteList])
         }
         case None => None.toSuccess
       }
@@ -851,19 +851,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       }
 
     case WeededAst.Expression.Con(con, fun, loc) =>
-      def visitCon(con: WeededAst.ConRule): Validation[NamedAst.ConRule, NameError] = con match {
-        case WeededAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
-          (c1, c2) => NamedAst.ConArrow(c1, c2)
-        }
-        case WeededAst.ConWhiteList(wl) => visitExp(wl, env0, uenv0, tenv0) map {
-          wl => NamedAst.ConWhiteList(wl)
-        }
-        case WeededAst.ConBase(t) => visitType(t, uenv0, tenv0) map {
-          t => NamedAst.ConBase(t)
-        }
-      }
-
-      mapN(visitCon(con), visitExp(fun, env0, uenv0, tenv0)) {
+      mapN(visitType(con, uenv0, tenv0), visitExp(fun, env0, uenv0, tenv0)) {
         (con, fun) => NamedAst.Expression.Con(con, fun, loc)
       }
 
@@ -1061,6 +1049,11 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     * Names the given type `tpe` under the given environments `uenv0` and `tenv0`.
     */
   private def visitType(tpe0: WeededAst.Type, uenv0: UseEnv, tenv0: Map[String, Type.Var])(implicit flix: Flix): Validation[NamedAst.Type, NameError] = tpe0 match {
+
+    case WeededAst.Type.WildCard(loc) => NamedAst.Type.WildCard(loc).toSuccess
+
+    case WeededAst.Type.WhiteList(names, loc) => NamedAst.Type.WhiteList(names, loc).toSuccess
+
     case WeededAst.Type.Unit(loc) => NamedAst.Type.Unit(loc).toSuccess
 
     case WeededAst.Type.Var(ident, loc) =>
@@ -1293,12 +1286,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       rulesFreeVars ++ defaultFreeVars
     case WeededAst.Expression.Spawn(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Con(con, fun, loc) =>
-      def freeVarsCons(con: WeededAst.ConRule): List[Name.Ident] = con match {
-        case WeededAst.ConArrow(c1, c2) => freeVarsCons(c1) ++ freeVarsCons(c2)
-        case WeededAst.ConWhiteList(wl) => freeVars(wl)
-        case WeededAst.ConBase(t) => freeVars(t)
-      }
-      freeVarsCons(con) ++ freeVars(fun)
+      freeVars(con) ++ freeVars(fun)
     case WeededAst.Expression.Lazy(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Force(exp, loc) => freeVars(exp)
     case WeededAst.Expression.FixpointConstraintSet(cs, loc) => cs.flatMap(freeVarsConstraint)
@@ -1357,6 +1345,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     * Returns the free variables in the given type `tpe0`.
     */
   private def freeVars(tpe0: WeededAst.Type): List[Name.Ident] = tpe0 match {
+    case WeededAst.Type.WildCard(loc) => Nil
+    case WeededAst.Type.WhiteList(names, loc) => Nil
     case WeededAst.Type.Var(ident, loc) => ident :: Nil
     case WeededAst.Type.Ambiguous(qname, loc) => Nil
     case WeededAst.Type.Unit(loc) => Nil
@@ -1386,6 +1376,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     */
   private def freeVarsWithKind(tpe0: WeededAst.Type, tenv: Map[String, Type.Var])(implicit flix: Flix): List[(Name.Ident, Kind)] = {
     def visit(tpe0: WeededAst.Type, varKind: => Kind): List[(Name.Ident, Kind)] = tpe0 match {
+      case WeededAst.Type.WildCard(loc) => Nil
+      case WeededAst.Type.WhiteList(exp, loc) => Nil
       case WeededAst.Type.Var(ident, loc) =>
         if (tenv.contains(ident.name))
           Nil

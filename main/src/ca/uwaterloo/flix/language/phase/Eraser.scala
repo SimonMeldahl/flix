@@ -235,7 +235,7 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
       ErasedAst.Expression.PutStaticField(field, visitExp(exp), visitTpe(tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
     case FinalAst.Expression.NewChannel(exp, pol, tpe, loc) =>
-      ErasedAst.Expression.NewChannel(visitExp(exp), pol.map(visitExp), visitTpe[PReference[PChan[T]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
+      ErasedAst.Expression.NewChannel(visitExp(exp), pol, visitTpe[PReference[PChan[T]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
     case FinalAst.Expression.GetChannel(exp, tpe, loc) =>
       ErasedAst.Expression.GetChannel(visitExp(exp), visitTpe(tpe), loc)
@@ -253,12 +253,7 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
       ErasedAst.Expression.Spawn(visitExp(exp), visitTpe(tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
     case FinalAst.Expression.Con(con, fun, tpe, loc) =>
-      def visitCon(con: FinalAst.ConRule): ErasedAst.ConRule = con match {
-        case FinalAst.ConArrow(c1, c2) => ErasedAst.ConArrow(visitCon(c1), visitCon(c2))
-        case FinalAst.ConWhiteList(wl) => ErasedAst.ConWhiteList(visitExp[PType](wl))
-        case FinalAst.ConBase(t) => ErasedAst.ConBase(visitTpe[PType](t))
-      }
-      ErasedAst.Expression.Con(visitCon(con), visitExp[PReference[PChan[PType]]](fun), visitTpe[PReference[PChan[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
+      ErasedAst.Expression.Con(visitTpe[PType](con), visitExp[PReference[PChan[PType]]](fun), visitTpe[PReference[PChan[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
     case FinalAst.Expression.Lazy(exp, tpe, loc) =>
       ErasedAst.Expression.Lazy(visitExp(exp), visitTpe[PReference[PLazy[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
@@ -285,6 +280,8 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
     * Translates the type 'tpe' to the ErasedType.
     */
   private def visitTpe[T <: PType](tpe: MonoType): EType[T] = (tpe match {
+    case MonoType.WildCard => Reference(Unit())
+    case MonoType.WhiteList(_, tpe) => Reference(Unit())
     case MonoType.Unit => Reference(Unit())
     case MonoType.Bool => Bool()
     case MonoType.Char => Char()

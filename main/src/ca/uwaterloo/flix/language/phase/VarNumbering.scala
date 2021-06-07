@@ -222,8 +222,7 @@ object VarNumbering extends Phase[Root, Root] {
       case Expression.PutStaticField(field, exp, tpe, loc) => visitExp(exp, i0)
 
       case Expression.NewChannel(exp, pol, tpe, loc) =>
-        val i1 = visitExp(exp, i0)
-        pol.map(visitExp(_, i1)).getOrElse(i1)
+        visitExp(exp, i0)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         visitExp(exp, i0)
@@ -254,15 +253,7 @@ object VarNumbering extends Phase[Root, Root] {
         visitExp(exp, i0)
 
       case Expression.Con(con, fun, _, _) =>
-        def visitCon(con: ConRule, i0: Int): Int = con match {
-          case ConArrow(c1, c2) =>
-            val i1 = visitCon(c1, i0)
-            visitCon(c2, i1)
-          case ConWhiteList(wl) => visitExp(wl, i0)
-          case ConBase(t) => i0
-        }
-        val i1 = visitCon(con, i0)
-        visitExp(fun, i1)
+        visitExp(fun, i0)
 
       case Expression.Lazy(exp, tpe, loc) =>
         visitExp(exp, i0)

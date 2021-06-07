@@ -189,7 +189,7 @@ object Safety extends Phase[Root, Root] {
     case Expression.PutStaticField(field, exp, tpe, eff, loc) =>
       visitExp(exp)
 
-    case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp) ::: pol.map(visitExp).getOrElse(Nil)
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp)
 
     case Expression.GetChannel(exp, tpe, eff, loc) => visitExp(exp)
 
@@ -206,13 +206,7 @@ object Safety extends Phase[Root, Root] {
 
     case Expression.Spawn(exp, tpe, eff, loc) => visitExp(exp)
 
-    case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: ConRule): List[CompilationError] = con match {
-        case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-        case ConWhiteList(wl) => visitExp(wl)
-        case ConBase(t) => List.empty
-      }
-      visitCon(con) ++ visitExp(fun)
+    case Expression.Con(con, fun, tpe, eff, loc) => visitExp(fun)
 
     case Expression.Lazy(exp, tpe, loc) => visitExp(exp)
 

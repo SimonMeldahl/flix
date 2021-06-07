@@ -281,8 +281,7 @@ object Optimizer extends Phase[Root, Root] {
 
       case Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp, env0)
-        val p = pol.map(visitExp(_, env0))
-        Expression.NewChannel(e, p, tpe, loc)
+        Expression.NewChannel(e, pol, tpe, loc)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp, env0)
@@ -310,14 +309,8 @@ object Optimizer extends Phase[Root, Root] {
         Expression.Spawn(e, tpe, loc)
 
       case Expression.Con(con, fun, tpe, loc) =>
-        def visitCon(con: ConRule): ConRule = con match {
-          case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
-          case ConWhiteList(wl) =>ConWhiteList(visitExp(wl, env0))
-          case ConBase(t) => ConBase(t)
-        }
         val f = visitExp(fun, env0)
-        val conVal = visitCon(con)
-        Expression.Con(conVal, f, tpe, loc)
+        Expression.Con(con, f, tpe, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp, env0)

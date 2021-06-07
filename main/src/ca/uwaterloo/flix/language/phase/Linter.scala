@@ -209,7 +209,7 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
       case Expression.PutStaticField(_, exp, _, _, _) => visitExp(exp, lint0)
 
-      case Expression.NewChannel(exp, pol, _, _, _) => visitExp(exp, lint0) ::: pol.map(visitExp(_, lint0)).getOrElse(Nil)
+      case Expression.NewChannel(exp, _, _, _, _) => visitExp(exp, lint0)
 
       case Expression.GetChannel(exp, _, _, _) => visitExp(exp, lint0)
 
@@ -222,13 +222,8 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
       case Expression.Spawn(exp, _, _, _) => visitExp(exp, lint0)
 
-      case Expression.Con(con, fun, tpe, eff, loc) =>
-        def visitCon(con: ConRule): List[LinterError] = con match {
-          case ConArrow(c1, c2) => visitCon(c1) ::: visitCon(c2)
-          case ConWhiteList(wl) => visitExp(wl, lint0)
-          case ConBase(t) => List.empty
-        }
-        visitCon(con) ::: visitExp(fun, lint0)
+      case Expression.Con(_, fun, _, _, _) =>
+        visitExp(fun, lint0)
 
       case Expression.Lazy(exp, _, _) => visitExp(exp, lint0)
 
@@ -516,12 +511,8 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
     case (Expression.PutStaticField(field1, exp1, _, _, _), Expression.PutStaticField(field2, exp2, _, _, _)) if field1 == field2 =>
       unifyExp(exp1, exp2, metaVars)
 
-    case (Expression.NewChannel(exp1, pol1, _, _, _), Expression.NewChannel(exp2, pol2, _, _, _)) =>
-      (pol1, pol2) match {
-        case (Some(p1), Some(p2)) => unifyExp(exp1, p1, exp2, p2, metaVars)
-        case (None, None) => unifyExp(exp1, exp2, metaVars)
-        case _ => None
-      }
+    case (Expression.NewChannel(exp1, _, _, _, _), Expression.NewChannel(exp2, _, _, _, _)) =>
+      unifyExp(exp1, exp2, metaVars)
 
     case (Expression.GetChannel(exp1, _, _, _), Expression.GetChannel(exp2, _, _, _)) =>
       unifyExp(exp1, exp2, metaVars)
@@ -910,8 +901,7 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
       case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
         val e = apply(exp)
-        val p = pol.map(apply)
-        Expression.NewChannel(e, p, tpe, eff, loc)
+        Expression.NewChannel(e, pol, tpe, eff, loc)
 
       case Expression.GetChannel(exp, tpe, eff, loc) =>
         val e = apply(exp)
@@ -934,12 +924,7 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
         Expression.Spawn(e, tpe, eff, loc)
 
       case Expression.Con(con, fun, tpe, eff, loc) =>
-        def visitCon(con: ConRule): ConRule = con match {
-          case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
-          case ConWhiteList(wl) => ConWhiteList(apply(wl))
-          case ConBase(t) => ConBase(t)
-        }
-        Expression.Con(visitCon(con), apply(fun), tpe, eff, loc)
+        Expression.Con(con, apply(fun), tpe, eff, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = apply(exp)

@@ -278,6 +278,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         throw InternalRuntimeException(field.getName + " is not implemented!!\n")
 
       case Expression.NewChannel(exp, pol, tpe, loc) =>
+        // TODO(LBS): change to new literal format
         val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
         val pols = pol map { value =>
           val Value.Arr(elms, _) = cast2array(eval(value, env0, lenv0, root, currentLabel))
@@ -288,10 +289,10 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       case Expression.GetChannel(exp, _, _) =>
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
         val Value.Tuple(e :: fromLabel :: con :: Nil) = c.get(currentLabel)
-        reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[Value.Con])
+        reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType])
 
       case pc@Expression.PutChannel(exp1, exp2, tpe, loc) =>
-        evalPutChannel(pc, env0, lenv0, currentLabel, Value.ConWhiteList(None), root)
+        evalPutChannel(pc, env0, lenv0, currentLabel, MonoType.WildCard, root)
 
       case Expression.SelectChannel(rules, default, _, _) =>
         // Evaluate all Channel expressions
@@ -314,7 +315,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         // The default was not chosen. Find the matching rule
         val selectedRule = rs.apply(selectChoice.branchNumber)
         val Value.Tuple(e :: fromLabel :: con :: Nil) = selectChoice.element
-        val channelOutput = reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[Value.Con])
+        val channelOutput = reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType])
         // Bind the sym of the rule to the element from the selected channel
         val newEnv = env0 + (selectedRule._1.toString -> channelOutput)
         // Evaluate the expression of the selected rule
@@ -328,20 +329,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
         Value.Unit
 
       case Expression.Con(con, fun, _, loc) =>
-        def visitCon(con: ConRule): Value.Con = con match {
-          case ConArrow(c1, c2) => Value.ConArrow(visitCon(c1), visitCon(c2))
-          case ConWhiteList(wl) =>
-            val wll = cast2array(eval(wl, env0, lenv0, root, currentLabel)).elms.map(cast2str(_).split('.').toList).toList
-            val whiteList = wll.map(f => if (f == List("<main>")) List() else f)
-            // ["?"] matches the whitelist
-            if (whiteList == List(List("?"))) Value.ConWhiteList(None)
-            else Value.ConWhiteList(Some(whiteList))
-          case ConBase(t) => Value.ConBase(t)
-        }
-
-        val contract = visitCon(con)
         val res = eval(fun, env0, lenv0, root, currentLabel)
-        reduceK(currentLabel, currentLabel, res, contract)
+        reduceK(currentLabel, currentLabel, res, con)
 
       case Expression.HoleError(sym, _, loc) => throw new HoleError(sym.toString, loc.reified)
 
@@ -366,7 +355,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     }
   }
 
-  private def evalPutChannel(exp: Expression.PutChannel, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], currentLabel: KLabel, con: Value.Con, root: Root)(implicit flix: Flix): AnyRef = {
+  private def evalPutChannel(exp: Expression.PutChannel, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], currentLabel: KLabel, con: MonoType, root: Root)(implicit flix: Flix): AnyRef = {
     val Expression.PutChannel(exp1, exp2, _, loc) = exp
     implicit val locc: SourceLocation = loc
     val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
@@ -711,7 +700,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
     // Evaluate the arguments.
     val as = evalArgs(args, env0, lenv0, root, currentLabel).map(a =>
-      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, Value.ConWhiteList(None)) else a)
+      if (hasLabelChanged) reduceK(fromLabel = toLabel, toLabel = fromLabel, a, MonoType.WildCard) else a)
 
     // Construct the new environment by pairing the formal parameters with the actual arguments.
     val env = defn.formals.zip(as).foldLeft(Map.empty[String, AnyRef]) {
@@ -721,26 +710,30 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     // Evaluate the body expression under the new local variable environment and an empty label environment.
     val finalValue = eval(defn.exp, env, Map.empty, root, fromLabel)
     if (hasLabelChanged)
-      reduceK(fromLabel = fromLabel, toLabel = toLabel, finalValue, Value.ConWhiteList(None))
+      reduceK(fromLabel = fromLabel, toLabel = toLabel, finalValue, MonoType.WildCard)
     else finalValue
   }
 
   // Check type of contracts at runtime here
-  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef, con: Value.Con)(implicit loc: SourceLocation): AnyRef = (value, con) match {
-    case (Value.True | Value.False, Value.ConBase(MonoType.Bool) | Value.ConWhiteList(None)) => value
-    case (Value.Unit, Value.ConBase(MonoType.Unit) | Value.ConWhiteList(None)) => value
-    case (Value.Int32(_), Value.ConBase(MonoType.Int32) | Value.ConWhiteList(None)) => value
-    case (Value.Int64(_), Value.ConBase(MonoType.Int64) | Value.ConWhiteList(None)) => value
-    case (Value.Str(_), Value.ConBase(MonoType.Str) | Value.ConWhiteList(None)) => value
-    case (Value.Arr(elms, t1), Value.ConBase(t2)) if t1 == t2 => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
-    case (Value.Arr(elms, t1), Value.ConWhiteList(None)) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
-    case (c: Value.Channel, Value.ConWhiteList(wl@Some(_))) => Value.Guard(c, fromLabel, toLabel, wl)
-    // If wl=None then it was ["?"] and we should match it to the channels policy
-    case (c: Value.Channel, Value.ConWhiteList(None)) => Value.Guard(c, fromLabel, toLabel, c.pols)
-    case (_: Value.Closure | _: Value.Lambda, Value.ConArrow(c1, c2)) => Value.Lambda(value, c1, c2, fromLabel, toLabel)
-    case (_: Value.Closure | _: Value.Lambda, wl@Value.ConWhiteList(None)) => Value.Lambda(value, wl, wl, fromLabel, toLabel)
-    case (v, Value.ConWhiteList(None)) => v // TODO(LBS): This is not safe for values with channel inside
-    case _ => throw InternalRuntimeException(s"Wrong types on contract $con @$loc")
+  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef, con: MonoType)(implicit loc: SourceLocation): AnyRef = (value, con) match {
+    case (Value.True | Value.False, MonoType.Bool | MonoType.WildCard) => value
+    case (Value.Unit, MonoType.Unit | MonoType.WildCard) => value
+    case (Value.Int32(_), MonoType.Int32 | MonoType.WildCard) => value
+    case (Value.Int64(_), MonoType.Int64 | MonoType.WildCard) => value
+    case (Value.Str(_), MonoType.Str | MonoType.WildCard) => value
+    case (Value.Arr(elms, t1), MonoType.Array(t2)) if t1 == t2 => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
+    case (Value.Arr(elms, t1), MonoType.WildCard) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
+    case (Value.Tuple(elms1), MonoType.Tuple(elms2)) if elms1.length == elms2.length => Value.Tuple(elms1.zip(elms2).map{
+      case (e1, e2) => reduceK(fromLabel, toLabel, e1, e2)
+    })
+    case (Value.Tuple(elms1), MonoType.WildCard) => Value.Tuple(elms1.map(reduceK(fromLabel, toLabel, _, MonoType.WildCard)))
+      // todo(LBS): inner contracts x2
+    case (c: Value.Channel, MonoType.WhiteList(names, _)) => Value.Guard(c, fromLabel, toLabel, Some(names.toList.map(n => n.idents.map(i => i.name))))
+    case (c: Value.Channel, MonoType.WildCard | _: MonoType.Channel) => Value.Guard(c, fromLabel, toLabel, c.pols)
+    case (_: Value.Closure | _: Value.Lambda, MonoType.Arrow(args, result)) => Value.Lambda(value, args, result, fromLabel, toLabel)
+    case (_: Value.Closure | _: Value.Lambda, MonoType.WildCard) => Value.Lambda(value, List(MonoType.WildCard), MonoType.WildCard, fromLabel, toLabel)
+    case (v, MonoType.WildCard) => v // TODO(LBS): This is not safe for values with channel inside
+    case _ => throw InternalRuntimeException(s"Wrong types on contract l@$con @$loc")
   }
 
   /**

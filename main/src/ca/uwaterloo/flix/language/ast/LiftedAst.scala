@@ -179,7 +179,7 @@ object LiftedAst {
 
     case class PutStaticField(field: Field, exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
-    case class NewChannel(exp: LiftedAst.Expression, policy: Option[LiftedAst.Expression], tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
+    case class NewChannel(exp: LiftedAst.Expression, policy: Option[TypeConstructor.WhiteList], tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
     case class GetChannel(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
@@ -189,7 +189,7 @@ object LiftedAst {
 
     case class Spawn(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
-    case class Con(con: LiftedAst.ConRule, fun: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
+    case class Con(con: Type, fun: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
     case class Lazy(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
@@ -202,14 +202,6 @@ object LiftedAst {
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: LiftedAst.Expression, exp: LiftedAst.Expression)
-
-  sealed trait ConRule
-
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
-
-  case class ConWhiteList(wl: LiftedAst.Expression) extends ConRule
-
-  case class ConBase(t: Type) extends ConRule
 
   case class Case(sym: Symbol.EnumSym, tag: Name.Tag, tpeDeprecated: Type, loc: SourceLocation)
 

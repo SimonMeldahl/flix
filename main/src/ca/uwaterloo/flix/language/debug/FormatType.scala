@@ -103,6 +103,11 @@ object FormatType {
         }
 
         case Some(tc) => tc match {
+
+          case TypeConstructor.WildCard => formatApply("?", args)
+
+          case TypeConstructor.WhiteList(names) => formatApply(names.mkString("<", ",", ">"), args)
+
           case TypeConstructor.Unit => formatApply("Unit", args)
 
           case TypeConstructor.Null => formatApply("Null", args)

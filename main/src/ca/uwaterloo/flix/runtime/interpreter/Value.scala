@@ -18,7 +18,7 @@ package ca.uwaterloo.flix.runtime.interpreter
 
 import ca.uwaterloo.flix.api.Flix
 import ca.uwaterloo.flix.language.ast.FinalAst.{Expression, Root}
-import ca.uwaterloo.flix.language.ast.{MonoType, SourceLocation, Symbol}
+import ca.uwaterloo.flix.language.ast.{MonoType, SourceLocation, Symbol, Name}
 import ca.uwaterloo.flix.runtime.interpreter.Interpreter.reduceK
 import ca.uwaterloo.flix.runtime.interpreter.{Channel => JavaChannel}
 import ca.uwaterloo.flix.util.InternalRuntimeException
@@ -54,9 +54,10 @@ object Value {
 
   case class Str(lit: java.lang.String) extends Value
 
-  case class Lambda(closure: AnyRef, con1: Con, con2: Con, fromLabel: KLabel, toLabel: KLabel)(implicit loc: SourceLocation) extends Value {
+  case class Lambda(closure: AnyRef, con1: List[MonoType], con2: MonoType, fromLabel: KLabel, toLabel: KLabel)(implicit loc: SourceLocation) extends Value {
     def call(args: List[Expression], env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], root: Root)(implicit flix: Flix): AnyRef = {
-      val kargs = args.map(e => Expression.K(e, fromLabel = toLabel, toLabel = fromLabel, con1, e.tpe, e.loc))
+      val con1New = if (con1 == List(MonoType.WildCard)) args.map(_ => MonoType.WildCard) else con1
+      val kargs = args.zip(con1New).map(e => Expression.K(e._1, fromLabel = toLabel, toLabel = fromLabel, e._2, e._1.tpe, e._1.loc))
       closure match {
         case c: Closure =>
           Interpreter.reduceK(fromLabel, toLabel, Interpreter.invokeClo(c, kargs, env0, lenv0, root, fromLabel), con2)
@@ -131,11 +132,6 @@ object Value {
 
     final override def toString: String = throw InternalRuntimeException(s"Value.Arr does not support `toString`.")
   }
-
-  sealed trait Con
-  case class ConArrow(c1: Con, c2: Con) extends Con
-  case class ConWhiteList(wl: Policy) extends Con
-  case class ConBase(t: MonoType) extends Con
 
   type KLabel = List[String]
 

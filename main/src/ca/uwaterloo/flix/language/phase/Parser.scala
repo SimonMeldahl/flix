@@ -796,7 +796,7 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def NewChannel: Rule1[ParsedAst.Expression.NewChannel] = rule {
-      SP ~ keyword("chan") ~ WS ~ Type ~ WS ~ Expression ~ optional(WS ~ keyword("restricted") ~ WS ~ Expression ~ optWS) ~ SP ~> ParsedAst.Expression.NewChannel
+      SP ~ keyword("chan") ~ WS ~ Type ~ WS ~ Expression ~ optional(WS ~ keyword("restricted") ~ WS ~ Types.SpecificallyWhiteList ~ optWS) ~ SP ~> ParsedAst.Expression.NewChannel
     }
 
     def GetChannel: Rule1[ParsedAst.Expression.GetChannel] = rule {
@@ -822,25 +822,8 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def Con: Rule1[ParsedAst.Expression.Con] = {
-      //TODO(LBS) maybe wrong association
-      def conArrow: Rule1[ParsedAst.ConRule] = rule {
-        conPrimary ~ optional(WS ~ atomic("->") ~ WS ~ conArrow ~> ParsedAst.ConArrow)
-      }
-
-      def conPrimary: Rule1[ParsedAst.ConRule] = rule {
-        conBase | conWhiteList | ( "(" ~ optWS ~ conArrow ~ optWS ~ ")" )
-      }
-
-      def conBase: Rule1[ParsedAst.ConRule] = rule {
-        Type ~> ParsedAst.ConBase
-      }
-
-      def conWhiteList: Rule1[ParsedAst.ConRule] = rule {
-        Expression ~> ParsedAst.ConWhiteList
-      }
-
       rule {
-        SP ~ keyword("con") ~ "(" ~ optWS ~ conArrow ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con
+        SP ~ keyword("con") ~ "(" ~ optWS ~ Type ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con
       }
     }
 
@@ -1248,7 +1231,19 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def Primary: Rule1[ParsedAst.Type] = rule {
-      Arrow | Tuple | Record | Schema | Native | True | False | Pure | Impure | Not | Var | Ambiguous
+      WildCard | WhiteList | Arrow | Tuple | Record | Schema | Native | True | False | Pure | Impure | Not | Var | Ambiguous
+    }
+
+    def WildCard: Rule1[ParsedAst.Type] = rule {
+      SP ~ "?" ~ SP ~> ParsedAst.Type.WildCard
+    }
+
+    def WhiteList: Rule1[ParsedAst.Type] = rule {
+      SP ~ atomic("<") ~ optWS ~ zeroOrMore(Names.EmptyNamespace | Names.Namespace).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ atomic(">") ~ SP ~> ParsedAst.Type.WhiteList
+    }
+
+    def SpecificallyWhiteList: Rule1[ParsedAst.Type.WhiteList] = rule {
+      SP ~ atomic("<") ~ optWS ~ zeroOrMore(Names.EmptyNamespace | Names.Namespace).separatedBy(optWS ~ "," ~ optWS) ~ optWS ~ atomic(">") ~ SP ~> ParsedAst.Type.WhiteList
     }
 
     def Arrow: Rule1[ParsedAst.Type] = {
@@ -1548,6 +1543,11 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     def Namespace: Rule1[Name.NName] = rule {
       SP ~ oneOrMore(UpperCaseName).separatedBy("/") ~ SP ~>
         ((sp1: SourcePosition, parts: Seq[Name.Ident], sp2: SourcePosition) => Name.NName(sp1, parts.toList, sp2))
+    }
+
+    def EmptyNamespace: Rule1[Name.NName] = rule {
+      SP ~ "/" ~ SP ~>
+        ((sp1: SourcePosition, sp2: SourcePosition) => Name.NName(sp1, List(), sp2))
     }
 
     def Annotation: Rule1[Name.Ident] = rule {

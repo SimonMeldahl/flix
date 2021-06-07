@@ -279,8 +279,8 @@ object Indexer {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
 
-    case Expression.NewChannel(exp, pol, _, _, _) =>
-      visitExp(exp) ++ pol.map(visitExp).getOrElse(Index.empty) ++ Index.occurrenceOf(exp0)
+    case Expression.NewChannel(exp, _, _, _, _) =>
+      visitExp(exp) ++ Index.occurrenceOf(exp0)
 
     case Expression.GetChannel(exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
@@ -299,13 +299,8 @@ object Indexer {
     case Expression.Spawn(exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
 
-    case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: TypedAst.ConRule): Index = con match {
-        case TypedAst.ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-        case TypedAst.ConWhiteList(wl) => visitExp(wl)
-        case TypedAst.ConBase(t) => visitType(t)
-      }
-      visitCon(con) ++ visitExp(fun) ++ Index.occurrenceOf(exp0)
+    case Expression.Con(_, fun, _, _, _) =>
+      visitExp(fun) ++ Index.occurrenceOf(exp0)
 
     case Expression.Lazy(exp, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)

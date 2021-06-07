@@ -400,6 +400,12 @@ object Type {
     Type.Var(id, k, r, text)
   }
 
+  def mkWildCard(loc: SourceLocation): Type = Type.Cst(TypeConstructor.WildCard, loc)
+
+  def mkWhiteList(names: Seq[Name.NName], loc: SourceLocation): Type = Type.Cst(TypeConstructor.WhiteList(names), loc)
+
+  def mkWhiteList(tpe: Type, names: Seq[Name.NName], loc: SourceLocation): Type = Type.Apply(Type.Cst(TypeConstructor.WhiteList(names), loc), tpe)
+
   /**
     * Returns the Unit type with given source location `loc`.
     */

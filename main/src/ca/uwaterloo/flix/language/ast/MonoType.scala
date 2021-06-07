@@ -28,6 +28,8 @@ object MonoType {
   /// Primitive Types.
   ///
 
+  case object WildCard extends MonoType
+
   case object Unit extends MonoType
 
   case object Bool extends MonoType
@@ -57,6 +59,8 @@ object MonoType {
   case class Array(tpe: MonoType) extends MonoType
 
   case class Channel(tpe: MonoType) extends MonoType
+
+  case class WhiteList(names: Seq[Name.NName], tpe: MonoType) extends MonoType
 
   case class Lazy(tpe: MonoType) extends MonoType
 

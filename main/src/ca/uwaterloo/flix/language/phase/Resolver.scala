@@ -791,18 +791,11 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
           }
 
         case NamedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
-          val polVal = pol match {
-            case Some(pol) =>
-              for {
-                pol <- visit(pol, tenv0)
-              } yield Some(pol)
-            case None => None.toSuccess
-          }
+          val p = pol.map(p => TypeConstructor.WhiteList(p.names))
 
           for {
             t <- lookupType(tpe, ns0, root)
             e <- visit(exp, tenv0)
-            p <- polVal
           } yield ResolvedAst.Expression.NewChannel(e, p, t, loc)
 
         case NamedAst.Expression.GetChannel(exp, tvar, loc) =>
@@ -844,21 +837,8 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
           } yield ResolvedAst.Expression.Spawn(e, loc)
 
         case NamedAst.Expression.Con(con, fun, loc) =>
-          def visitCon(con: NamedAst.ConRule): Validation[ResolvedAst.ConRule, ResolutionError] = con match {
-            case NamedAst.ConArrow(c1, c2) => for {
-              c1 <- visitCon(c1)
-              c2 <- visitCon(c2)
-            } yield ResolvedAst.ConArrow(c1, c2)
-            case NamedAst.ConWhiteList(wl) => for {
-              wl <- visit(wl, tenv0)
-            } yield ResolvedAst.ConWhiteList(wl)
-            case NamedAst.ConBase(t) => for {
-              t <- lookupType(t, ns0, root)
-            } yield ResolvedAst.ConBase(t)
-          }
-
           for {
-            con <- visitCon(con)
+            con <- lookupType(con, ns0, root)
             fun <- visit(fun, tenv0)
           } yield ResolvedAst.Expression.Con(con, fun, loc)
 
@@ -1291,6 +1271,10 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
     * Resolves the given type `tpe0` in the given namespace `ns0`.
     */
   def lookupType(tpe0: NamedAst.Type, ns0: Name.NName, root: NamedAst.Root)(implicit recursionDepth: Int = 0): Validation[Type, ResolutionError] = tpe0 match {
+    case NamedAst.Type.WildCard(loc) => Type.mkWildCard(loc).toSuccess
+
+    case NamedAst.Type.WhiteList(names, loc) => Type.mkWhiteList(names, loc).toSuccess
+
     case NamedAst.Type.Var(tvar, loc) => tvar.toSuccess
 
     case NamedAst.Type.Unit(loc) => Type.mkUnit(loc).toSuccess

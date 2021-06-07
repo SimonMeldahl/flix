@@ -250,7 +250,7 @@ object TypedAst {
 
     case class PutStaticField(field: Field, exp: TypedAst.Expression, tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
-    case class NewChannel(exp: TypedAst.Expression, policy: Option[TypedAst.Expression], tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
+    case class NewChannel(exp: TypedAst.Expression, policy: Option[TypeConstructor.WhiteList], tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
     case class GetChannel(exp: TypedAst.Expression, tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
@@ -260,7 +260,7 @@ object TypedAst {
 
     case class Spawn(exp: TypedAst.Expression, tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
-    case class Con(con: TypedAst.ConRule, fun: TypedAst.Expression, tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
+    case class Con(con: Type, fun: TypedAst.Expression, tpe: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
     case class Lazy(exp: TypedAst.Expression, tpe: Type, loc: SourceLocation) extends TypedAst.Expression {
       def eff: Type = Type.Pure
@@ -431,14 +431,6 @@ object TypedAst {
   case class MatchRule(pat: TypedAst.Pattern, guard: TypedAst.Expression, exp: TypedAst.Expression)
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: TypedAst.Expression, exp: TypedAst.Expression)
-
-  sealed trait ConRule
-
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
-
-  case class ConWhiteList(wl: TypedAst.Expression) extends ConRule
-
-  case class ConBase(t: Type) extends ConRule
 
   case class TypeParam(name: Name.Ident, tpe: Type.Var, loc: SourceLocation)
 

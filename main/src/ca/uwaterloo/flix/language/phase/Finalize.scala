@@ -337,8 +337,7 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
       case LiftedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visit(exp)
         val t = visitType(tpe)
-        val p = pol.map(visit)
-        FinalAst.Expression.NewChannel(e, p, t, loc)
+        FinalAst.Expression.NewChannel(e, pol, t, loc)
 
       case LiftedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visit(exp)
@@ -368,13 +367,8 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
         FinalAst.Expression.Spawn(e, t, loc)
 
       case LiftedAst.Expression.Con(con, fun, tpe, loc) =>
-        def visitCon(con: LiftedAst.ConRule): FinalAst.ConRule = con match {
-          case LiftedAst.ConArrow(c1, c2) => FinalAst.ConArrow(visitCon(c1), visitCon(c2))
-          case LiftedAst.ConWhiteList(wl) => FinalAst.ConWhiteList(visit(wl))
-          case LiftedAst.ConBase(t) => FinalAst.ConBase(visitType(t))
-        }
         val f = visit(fun)
-        val conVal = visitCon(con)
+        val conVal = visitType(con)
         val t = visitType(tpe)
         FinalAst.Expression.Con(conVal, f, t, loc)
 
@@ -423,6 +417,8 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
 
       case Some(tc) =>
         tc match {
+          case TypeConstructor.WildCard => MonoType.WildCard
+
           case TypeConstructor.Unit => MonoType.Unit
 
           case TypeConstructor.Null => MonoType.Unit
@@ -452,6 +448,8 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
           case TypeConstructor.Array => MonoType.Array(args.head)
 
           case TypeConstructor.Channel => MonoType.Channel(args.head)
+
+          case TypeConstructor.WhiteList(names) => MonoType.WhiteList(names, args.head)
 
           case TypeConstructor.Lazy => MonoType.Lazy(args.head)
 

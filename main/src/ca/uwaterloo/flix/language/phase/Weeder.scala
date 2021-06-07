@@ -1261,15 +1261,10 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
       }
 
     case ParsedAst.Expression.NewChannel(sp1, tpe, exp, policy, sp2) =>
-      val pol = policy match {
-        case Some(pol) => visitExp(pol) map {
-          pol => Some(pol)
-        }
-        case None => None.toSuccess
-      }
+      val pol = policy.map(p => visitType(p).asInstanceOf[WeededAst.Type.WhiteList])
 
-      mapN(visitExp(exp), pol) {
-        (e, p) => WeededAst.Expression.NewChannel(e, p, visitType(tpe), mkSL(sp1, sp2))
+      visitExp(exp) map {
+        e => WeededAst.Expression.NewChannel(e, pol, visitType(tpe), mkSL(sp1, sp2))
       }
 
     case ParsedAst.Expression.GetChannel(sp1, exp, sp2) =>
@@ -1306,18 +1301,8 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
       }
 
     case ParsedAst.Expression.Con(sp1, con, fun, sp2) =>
-      def visitCon(con: ParsedAst.ConRule): Validation[WeededAst.ConRule, WeederError] = con match {
-        case ParsedAst.ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
-          (c1, c2) => WeededAst.ConArrow(c1, c2)
-        }
-        case ParsedAst.ConWhiteList(wl) => visitExp(wl) map {
-          wl => WeededAst.ConWhiteList(wl)
-        }
-        case ParsedAst.ConBase(t) => WeededAst.ConBase(visitType(t)).toSuccess
-      }
-
-      mapN(visitCon(con), visitExp(fun)) {
-        (con, fun) => WeededAst.Expression.Con(con, fun, mkSL(sp1, sp2))
+      visitExp(fun) map {
+        fun => WeededAst.Expression.Con(visitType(con), fun, mkSL(sp1, sp2))
       }
 
     case ParsedAst.Expression.Lazy(sp1, exp, sp2) =>
@@ -1872,6 +1857,12 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     * Weeds the given parsed type `tpe`.
     */
   private def visitType(tpe: ParsedAst.Type): WeededAst.Type = tpe match {
+
+    case ParsedAst.Type.WildCard(sp1, sp2) => WeededAst.Type.WildCard(mkSL(sp1, sp2))
+
+    case ParsedAst.Type.WhiteList(sp1, names, sp2) =>
+      WeededAst.Type.WhiteList(names, mkSL(sp1, sp2))
+
     case ParsedAst.Type.Unit(sp1, sp2) => WeededAst.Type.Unit(mkSL(sp1, sp2))
 
     case ParsedAst.Type.Var(sp1, ident, sp2) => WeededAst.Type.Var(ident, mkSL(sp1, sp2))
@@ -2353,6 +2344,8 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     */
   @tailrec
   private def leftMostSourcePosition(tpe: ParsedAst.Type): SourcePosition = tpe match {
+    case ParsedAst.Type.WildCard(sp1, _) => sp1
+    case ParsedAst.Type.WhiteList(sp1, _, _) => sp1
     case ParsedAst.Type.Unit(sp1, _) => sp1
     case ParsedAst.Type.Var(sp1, _, _) => sp1
     case ParsedAst.Type.Ambiguous(sp1, _, _) => sp1

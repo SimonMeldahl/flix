@@ -193,7 +193,7 @@ object TypedAstOps {
       case Expression.PutStaticField(field, exp, tpe, eff, loc) =>
         visitExp(exp, env0)
 
-      case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp, env0) ++ pol.map(visitExp(_, env0)).getOrElse(Map.empty)
+      case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp, env0)
 
       case Expression.GetChannel(exp, tpe, eff, loc) => visitExp(exp, env0)
 
@@ -210,13 +210,7 @@ object TypedAstOps {
 
       case Expression.Spawn(exp, tpe, eff, loc) => visitExp(exp, env0)
 
-      case Expression.Con(con, fun, tpe, eff, loc) =>
-        def visitCon(con: ConRule): Map[Symbol.HoleSym, HoleContext] = con match {
-          case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-          case ConWhiteList(wl) => visitExp(wl, env0)
-          case ConBase(_) => Map.empty
-        }
-        visitCon(con) ++ visitExp(fun, env0)
+      case Expression.Con(con, fun, tpe, eff, loc) => visitExp(fun, env0)
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp, env0)
 
@@ -381,18 +375,12 @@ object TypedAstOps {
     case Expression.PutField(_, exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.GetStaticField(_, _, _, _) => Set.empty
     case Expression.PutStaticField(_, exp, _, _, _) => sigSymsOf(exp)
-    case Expression.NewChannel(exp, pol, _, _, _) => sigSymsOf(exp) ++ pol.toSet.flatMap(sigSymsOf)
+    case Expression.NewChannel(exp, _, _, _, _) => sigSymsOf(exp)
     case Expression.GetChannel(exp, _, _, _) => sigSymsOf(exp)
     case Expression.PutChannel(exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.SelectChannel(rules, default, _, _, _) => rules.flatMap(rule => sigSymsOf(rule.chan) ++ sigSymsOf(rule.exp)).toSet ++ default.toSet.flatMap(sigSymsOf)
     case Expression.Spawn(exp, _, _, _) => sigSymsOf(exp)
-    case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: ConRule): Set[Symbol.SigSym] = con match {
-        case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-        case ConWhiteList(wl) => sigSymsOf(wl)
-        case ConBase(t) => Set.empty
-      }
-      visitCon(con) ++ sigSymsOf(fun)
+    case Expression.Con(con, fun, tpe, eff, loc) => sigSymsOf(fun)
     case Expression.Lazy(exp, _, _) => sigSymsOf(exp)
     case Expression.Force(exp, _, _, _) => sigSymsOf(exp)
     case Expression.FixpointConstraintSet(_, _, _, _) => Set.empty
@@ -613,8 +601,8 @@ object TypedAstOps {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       freeVars(exp)
 
-    case Expression.NewChannel(exp, pol, _, _, _) =>
-      freeVars(exp) ++ pol.map(freeVars).getOrElse(Map.empty)
+    case Expression.NewChannel(exp, _, _, _, _) =>
+      freeVars(exp)
 
     case Expression.GetChannel(exp, _, _, _) =>
       freeVars(exp)
@@ -631,13 +619,8 @@ object TypedAstOps {
     case Expression.Spawn(exp, _, _, _) =>
       freeVars(exp)
 
-    case Expression.Con(con, fun, _, _, _) =>
-      def freeVarsCons(con: ConRule): Map[Symbol.VarSym, Type] = con match {
-        case ConArrow(c1, c2) => freeVarsCons(c1) ++ freeVarsCons(c2)
-        case ConWhiteList(wl) => freeVars(wl)
-        case ConBase(_) => Map.empty
-      }
-      freeVarsCons(con) ++ freeVars(fun)
+    case Expression.Con(_, fun, _, _, _) =>
+      freeVars(fun)
 
     case Expression.Lazy(exp, _, _) =>
       freeVars(exp)

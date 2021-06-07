@@ -315,8 +315,7 @@ object LambdaLift extends Phase[SimplifiedAst.Root, LiftedAst.Root] {
 
       case SimplifiedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        val p = pol.map(visitExp)
-        LiftedAst.Expression.NewChannel(e, p, tpe, loc)
+        LiftedAst.Expression.NewChannel(e, pol, tpe, loc)
 
       case SimplifiedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)
@@ -344,14 +343,8 @@ object LambdaLift extends Phase[SimplifiedAst.Root, LiftedAst.Root] {
         LiftedAst.Expression.Spawn(e, tpe, loc)
 
       case SimplifiedAst.Expression.Con(con, fun, tpe, loc) =>
-        def visitCon(con: SimplifiedAst.ConRule): LiftedAst.ConRule = con match {
-          case SimplifiedAst.ConArrow(c1, c2) => LiftedAst.ConArrow(visitCon(c1), visitCon(c2))
-          case SimplifiedAst.ConWhiteList(wl) => LiftedAst.ConWhiteList(visitExp(wl))
-          case SimplifiedAst.ConBase(t) => LiftedAst.ConBase(t)
-        }
         val f = visitExp(fun)
-        val conVal = visitCon(con)
-        LiftedAst.Expression.Con(conVal, f, tpe, loc)
+        LiftedAst.Expression.Con(con, f, tpe, loc)
 
       case SimplifiedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)

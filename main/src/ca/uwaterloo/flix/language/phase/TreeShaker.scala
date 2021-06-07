@@ -260,8 +260,8 @@ object TreeShaker extends Phase[Root, Root] {
     case Expression.PutStaticField(_, exp, _, _) =>
       visitExp(exp)
 
-    case Expression.NewChannel(exp, pol, _, _) =>
-      visitExp(exp) ++ pol.map(visitExp).getOrElse(Set.empty)
+    case Expression.NewChannel(exp, _, _, _) =>
+      visitExp(exp)
 
     case Expression.GetChannel(exp, _, _) =>
       visitExp(exp)
@@ -278,12 +278,7 @@ object TreeShaker extends Phase[Root, Root] {
       visitExp(exp)
 
     case Expression.Con(con, fun, tpe, loc) =>
-      def visitCon(con: ConRule): Set[Symbol.DefnSym] = con match {
-        case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-        case ConWhiteList(wl) => visitExp(wl)
-        case ConBase(t) => Set.empty
-      }
-      visitCon(con) ++ visitExp(fun)
+      visitExp(fun)
 
     case Expression.Lazy(exp, _, _) =>
       visitExp(exp)

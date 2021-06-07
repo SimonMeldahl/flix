@@ -315,16 +315,7 @@ object Stratifier extends Phase[Root, Root] {
       }
 
     case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
-      val polVal = pol match {
-        case Some(pol) => visitExp(pol) map {
-          pol => Some(pol)
-        }
-        case None => None.toSuccess
-      }
-
-      mapN(visitExp(exp), polVal) {
-        (e, p) => Expression.NewChannel(e, p, tpe, eff, loc)
-      }
+      visitExp(exp).map(e => Expression.NewChannel(e, pol, tpe, eff, loc))
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
       mapN(visitExp(exp)) {
@@ -360,17 +351,8 @@ object Stratifier extends Phase[Root, Root] {
       }
 
     case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: ConRule): Validation[ConRule, StratificationError] = con match {
-        case ConArrow(c1, c2) => mapN(visitCon(c1), visitCon(c2)) {
-          (c1, c2) => ConArrow(c1, c2)
-        }
-        case ConWhiteList(wl) => visitExp(wl) map {
-          wl => ConWhiteList(wl)
-        }
-        case b: ConBase => b.toSuccess
-      }
-      mapN(visitCon(con), visitExp(fun)) {
-        (con, fun) => Expression.Con(con, fun, tpe, eff, loc)
+      visitExp(fun) map {
+        case fun => Expression.Con(con, fun, tpe, eff, loc)
       }
 
     case Expression.Lazy(exp, tpe, loc) =>
@@ -604,8 +586,8 @@ object Stratifier extends Phase[Root, Root] {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       dependencyGraphOfExp(exp)
 
-    case Expression.NewChannel(exp, pol, _, _, _) =>
-      dependencyGraphOfExp(exp) + pol.map(dependencyGraphOfExp).getOrElse(DependencyGraph.empty)
+    case Expression.NewChannel(exp, _, _, _, _) =>
+      dependencyGraphOfExp(exp)
 
     case Expression.GetChannel(exp, _, _, _) =>
       dependencyGraphOfExp(exp)
@@ -626,13 +608,8 @@ object Stratifier extends Phase[Root, Root] {
     case Expression.Spawn(exp, _, _, _) =>
       dependencyGraphOfExp(exp)
 
-    case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: ConRule): DependencyGraph = con match {
-        case ConArrow(c1, c2) => visitCon(c1) + visitCon(c2)
-        case ConWhiteList(wl) => dependencyGraphOfExp(wl)
-        case ConBase(_) => DependencyGraph.empty
-      }
-      visitCon(con) + dependencyGraphOfExp(fun)
+    case Expression.Con(_, fun, _, _, _) =>
+      dependencyGraphOfExp(fun)
 
     case Expression.Lazy(exp, _, _) =>
       dependencyGraphOfExp(exp)

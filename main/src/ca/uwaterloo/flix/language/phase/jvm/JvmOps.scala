@@ -692,13 +692,7 @@ object JvmOps {
 
       case Expression.Spawn(exp, tpe, loc) => visitExp(exp)
 
-      case Expression.Con(con, fun, _, _) =>
-        def visitCon(con: ConRule): Set[ClosureInfo] = con match {
-          case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-          case ConWhiteList(wl) => visitExp(wl)
-          case ConBase(t) => Set.empty
-        }
-        visitCon(con) ++ visitExp(fun)
+      case Expression.Con(_, fun, _, _) => visitExp(fun)
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp)
 
@@ -763,6 +757,8 @@ object JvmOps {
 
   // TODO: Should be removed.
   private def hackMonoType2Type(tpe: MonoType): Type = tpe match {
+    case MonoType.WildCard => Type.mkWildCard(SourceLocation.Unknown)
+    case MonoType.WhiteList(names, tpe) => Type.mkWhiteList(hackMonoType2Type(tpe), names, SourceLocation.Unknown)
     case MonoType.Var(id) => Type.Var(id, Kind.Star)
     case MonoType.Unit => Type.Unit
     case MonoType.Bool => Type.Bool
@@ -1004,12 +1000,7 @@ object JvmOps {
       case Expression.Spawn(exp, tpe, loc) => visitExp(exp) + tpe
 
       case Expression.Con(con, fun, tpe, _) =>
-        def visitCon(con: ConRule): Set[MonoType] = con match {
-          case ConArrow(c1, c2) => visitCon(c1) ++ visitCon(c2)
-          case ConWhiteList(wl) => visitExp(wl)
-          case ConBase(t) => Set(t)
-        }
-        visitCon(con) ++ visitExp(fun) + tpe
+        visitExp(fun) + tpe + con
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp) + tpe
 
@@ -1045,6 +1036,8 @@ object JvmOps {
     // but not have all its tags constructed as expressions.
     //
     tpe match {
+      case MonoType.WildCard => Set(tpe)
+      case MonoType.WhiteList(names, tpe) => nestedTypesOf(tpe) + tpe
       case MonoType.Unit => Set(tpe)
       case MonoType.Bool => Set(tpe)
       case MonoType.Char => Set(tpe)

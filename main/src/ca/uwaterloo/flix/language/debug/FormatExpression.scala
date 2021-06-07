@@ -72,12 +72,7 @@ object FormatExpression {
     case TypedAst.Expression.SelectChannel(rules, default, tpe, eff, loc) => s"SelectChannel(${rules.mkString(", ")}, $default)"
     case TypedAst.Expression.Spawn(exp, tpe, eff, loc) => s"Spawn($exp)"
     case TypedAst.Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: TypedAst.ConRule): String = con match {
-        case TypedAst.ConArrow(c1, c2) => s"ConArrow(${visitCon(c1)}, ${visitCon(c2)})"
-        case TypedAst.ConWhiteList(wl) => s"ConWhiteList(${format(wl)})"
-        case TypedAst.ConBase(t) => s"ConBase(_)"
-      }
-      s"Con(${visitCon(con)}, ${format(fun)})"
+      s"Con(.., ${format(fun)})"
     case TypedAst.Expression.Lazy(exp, tpe, loc) => s"Lazy($exp)"
     case TypedAst.Expression.Force(exp, tpe, eff, loc) => s"Force($exp)"
     case TypedAst.Expression.FixpointConstraintSet(cs, stf, tpe, loc) => s"FixpointConstraintSet($cs})"
@@ -139,12 +134,7 @@ object FormatExpression {
     case FinalAst.Expression.SelectChannel(rules, default, tpe, loc) => s"SelectChannel(${rules.mkString(", ")}, $default)"
     case FinalAst.Expression.Spawn(exp, tpe, loc) => s"Spawn(${format(exp)})"
     case FinalAst.Expression.Con(con, fun, tpe, loc) =>
-      def visitCon(con: FinalAst.ConRule): String = con match {
-        case FinalAst.ConArrow(c1, c2) => s"ConArrow(${visitCon(c1)}, ${visitCon(c2)})"
-        case FinalAst.ConWhiteList(wl) => s"ConWhiteList(${format(wl)})"
-        case FinalAst.ConBase(t) => s"ConBase($t)"
-      }
-      s"Con(${visitCon(con)}, ${format(fun)})"
+      s"Con(..., ${format(fun)})"
     case FinalAst.Expression.Lazy(exp, tpe, loc) => s"Lazy(${format(exp)})"
     case FinalAst.Expression.Force(exp, tpe, loc) => s"Force(${format(exp)})"
     case FinalAst.Expression.ApplyClo(exp, args, tpe, loc) => s"ApplyClo(${format(exp)}, args: ${args.map(format).mkString(", ")})"
@@ -158,12 +148,7 @@ object FormatExpression {
     case FinalAst.Expression.JumpTo(sym, tpe, loc) => s"JumpTo(${sym.toString})"
     case FinalAst.Expression.K(exp, fromLabel, toLabel, con, tpe, loc) =>
       import ca.uwaterloo.flix.runtime.interpreter.Value
-      def visitCon(con: Value.Con): String = con match {
-        case Value.ConArrow(c1, c2) => s"ConArrow(${visitCon(c1)}, ${visitCon(c2)})"
-        case Value.ConWhiteList(wl) => s"ConWhiteList(${Value.polsString(wl)})"
-        case Value.ConBase(t) => s"ConBase($t)"
-      }
-      s"K(${format(exp)}, ${Value.kLabelString(fromLabel)}, ${Value.kLabelString(toLabel)}, ${visitCon(con)})"
+      s"K(${format(exp)}, ${Value.kLabelString(fromLabel)}, ${Value.kLabelString(toLabel)})"
     case FinalAst.Expression.MatchError(tpe, loc) => s"MatchError($tpe)"
     case FinalAst.Expression.Untag(sym, tag, exp, tpe, loc) => s"Untag(${sym.toString}, ${format(exp)})"
     case FinalAst.Expression.ApplyCloTail(exp, args, tpe, loc) => s"ApplyCloTail(${format(exp)}, args: ${args.map(format).mkString(", ")})"

@@ -183,7 +183,7 @@ object FinalAst {
 
     case class PutStaticField(field: Field, exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
-    case class NewChannel(exp: FinalAst.Expression, policy: Option[FinalAst.Expression], tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+    case class NewChannel(exp: FinalAst.Expression, policy: Option[TypeConstructor.WhiteList], tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
     case class GetChannel(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
@@ -193,7 +193,7 @@ object FinalAst {
 
     case class Spawn(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
-    case class Con(con: FinalAst.ConRule, fun: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+    case class Con(con: MonoType, fun: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
     case class Lazy(exp: FinalAst.Expression, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
@@ -203,18 +203,10 @@ object FinalAst {
 
     case class MatchError(tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
 
-    case class K(exp: FinalAst.Expression, fromLabel: Value.KLabel, toLabel: Value.KLabel, con: Value.Con, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
+    case class K(exp: FinalAst.Expression, fromLabel: Value.KLabel, toLabel: Value.KLabel, con: MonoType, tpe: MonoType, loc: SourceLocation) extends FinalAst.Expression
   }
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: FinalAst.Expression, exp: FinalAst.Expression)
-
-  sealed trait ConRule
-
-  case class ConArrow(c1: ConRule, c2: ConRule) extends ConRule
-
-  case class ConWhiteList(wl: FinalAst.Expression) extends ConRule
-
-  case class ConBase(t: MonoType) extends ConRule
 
   case class Case(sym: Symbol.EnumSym, tag: Name.Tag, tpeDeprecated: MonoType, loc: SourceLocation)
 

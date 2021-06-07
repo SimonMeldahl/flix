@@ -500,13 +500,8 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       visitExp(exp, env0)
 
-    case Expression.NewChannel(exp, pol, _, _, _) =>
-      val polVal = pol match {
-        case Some(pol) => visitExp(pol, env0)
-        case None => Used.empty
-      }
-
-      visitExp(exp, env0) and polVal
+    case Expression.NewChannel(exp, _, _, _, _) =>
+      visitExp(exp, env0)
 
     case Expression.GetChannel(exp, _, _, _) =>
       visitExp(exp, env0)
@@ -547,13 +542,8 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
 
     case Expression.Spawn(exp, _, _, _) => visitExp(exp, env0)
 
-    case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: TypedAst.ConRule): Used = con match {
-        case TypedAst.ConArrow(c1, c2) => visitCon(c1) and visitCon(c2)
-        case TypedAst.ConWhiteList(wl) => visitExp(wl, env0)
-        case TypedAst.ConBase(_) => Used.empty
-      }
-      visitCon(con) and visitExp(fun, env0)
+    case Expression.Con(_, fun, _, _, _) =>
+      visitExp(fun, env0)
 
     case Expression.Lazy(exp, _, _) =>
       // Remove the recursion context as `exp` will not necessarily be evaluated.

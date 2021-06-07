@@ -282,7 +282,6 @@ object SimplifiedAstOps {
 
       case Expression.NewChannel(exp, pol, tpe, loc) =>
         checkExp(exp, env0, ienv0)
-        pol.foreach(checkExp(_, env0, ienv0))
         checkType(tpe)
 
       case Expression.GetChannel(exp, tpe, loc) =>
@@ -307,12 +306,7 @@ object SimplifiedAstOps {
         checkType(tpe)
 
       case Expression.Con(con, fun, tpe, loc) =>
-        def visitCon(con: ConRule): Unit = con match {
-          case ConArrow(c1, c2) => visitCon(c1); visitCon(c2)
-          case ConWhiteList(wl) => checkExp(wl, env0, ienv0)
-          case ConBase(t) => checkType(t)
-        }
-        visitCon(con)
+        checkType(con)
         checkExp(fun, env0, ienv0)
         checkType(tpe)
 

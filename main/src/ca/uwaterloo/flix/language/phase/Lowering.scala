@@ -420,8 +420,7 @@ object Lowering extends Phase[Root, Root] {
     case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
       val e = visitExp(exp)
       val t = visitType(tpe)
-      val p = pol.map(visitExp)
-      Expression.NewChannel(e, p, t, eff, loc)
+      Expression.NewChannel(e, pol, t, eff, loc)
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
       val e = visitExp(exp)
@@ -446,15 +445,10 @@ object Lowering extends Phase[Root, Root] {
       Expression.Spawn(e, t, eff, loc)
 
     case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: ConRule): ConRule = con match {
-        case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
-        case ConWhiteList(wl) => ConWhiteList(visitExp(wl))
-        case ConBase(t) => ConBase(visitType(t))
-      }
       val e = visitExp(fun)
-      val conVal = visitCon(con)
+      val contpe = visitType(con)
       val t = visitType(tpe)
-      Expression.Con(conVal, e, t, eff, loc)
+      Expression.Con(contpe, e, t, eff, loc)
 
     case Expression.Lazy(exp, tpe, loc) =>
       val e = visitExp(exp)
@@ -1366,8 +1360,7 @@ object Lowering extends Phase[Root, Root] {
 
     case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
       val e = substExp(exp, subst)
-      val p = pol.map(substExp(_, subst))
-      Expression.NewChannel(e, p, tpe, eff, loc)
+      Expression.NewChannel(e, pol, tpe, eff, loc)
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
       val e = substExp(exp, subst)
@@ -1385,12 +1378,7 @@ object Lowering extends Phase[Root, Root] {
       Expression.Spawn(e, tpe, eff, loc)
 
     case Expression.Con(con, fun, tpe, eff, loc) =>
-      def visitCon(con: ConRule): ConRule = con match {
-        case ConArrow(c1, c2) => ConArrow(visitCon(c1), visitCon(c2))
-        case ConWhiteList(wl) => ConWhiteList(substExp(wl, subst))
-        case ConBase(t) => ConBase(t)
-      }
-      Expression.Con(visitCon(con), substExp(fun, subst), tpe, eff, loc)
+      Expression.Con(con, substExp(fun, subst), tpe, eff, loc)
 
     case Expression.Lazy(exp, tpe, loc) =>
       val e = substExp(exp, subst)

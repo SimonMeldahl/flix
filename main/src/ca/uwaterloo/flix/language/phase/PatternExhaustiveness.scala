@@ -287,12 +287,8 @@ object PatternExhaustiveness extends Phase[TypedAst.Root, TypedAst.Root] {
             _ <- checkPats(exp, root)
           } yield tast
 
-        case Expression.NewChannel(exp, pol, _, _, _) => for {
+        case Expression.NewChannel(exp, _, _, _, _) => for {
           _ <- checkPats(exp, root)
-          _ <- pol match {
-            case Some(pol) => checkPats(pol, root)
-            case None => None.toSuccess
-          }
         } yield tast
 
         case Expression.GetChannel(exp, _, _, _) => for {
@@ -320,18 +316,7 @@ object PatternExhaustiveness extends Phase[TypedAst.Root, TypedAst.Root] {
         } yield tast
 
         case Expression.Con(con, fun, tpe, eff, loc) =>
-          def visitCon(con: TypedAst.ConRule): Validation[TypedAst.Expression, CompilationError] = con match {
-            case TypedAst.ConArrow(c1, c2) => for {
-              _ <- visitCon(c1)
-              _ <- visitCon(c2)
-            } yield tast
-            case TypedAst.ConWhiteList(wl) => for {
-              _ <- checkPats(wl, root)
-            } yield tast
-            case TypedAst.ConBase(_) => tast.toSuccess
-          }
           for {
-            _ <- visitCon(con)
             _ <- checkPats(fun, root)
           } yield tast
 

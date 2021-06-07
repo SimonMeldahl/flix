@@ -1236,20 +1236,12 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         //  channel exp : Channel[t] @ Impure
         //
 
-        def inferPol(pol: Option[ResolvedAst.Expression]): InferMonad[(List[Ast.TypeConstraint], Type, Type)] =
-          pol match {
-            case Some(pol) => visitExp(pol)
-            case None => liftM(Nil, Type.freshVar(Kind.Star), Type.Pure)
-          }
-
         for {
-          (constrs, tpe, _) <- visitExp(exp)
-          (polConstrs, polTpe, _) <- inferPol(pol)
+          (constrs, tpe, resultEff) <- visitExp(exp)
           lengthType <- unifyTypeM(tpe, Type.Int32, loc)
-          polIsList <- unifyTypeM(polTpe, Type.Apply(Type.Array, Type.Str), loc)
           resultTyp <- liftM(Type.mkChannel(declaredType))
           resultEff = Type.Impure
-        } yield (constrs ++ polConstrs, resultTyp, resultEff)
+        } yield (constrs, resultTyp, resultEff)
 
       case ResolvedAst.Expression.GetChannel(exp, tvar, loc) =>
         val elementType = Type.freshVar(Kind.Star)
@@ -1310,23 +1302,11 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         } yield (constrs, resultTyp, resultEff)
 
       case ResolvedAst.Expression.Con(con, fun, loc) =>
-        def visitCon(con: ResolvedAst.ConRule): InferMonad[(List[Ast.TypeConstraint], Type, Type)] = con match {
-          case ResolvedAst.ConArrow(c1, c2) => for {
-            (c1Constrs, c1Tpe, _) <- visitCon(c1)
-            (c2Constrs, _, _) <- visitCon(c2)
-          } yield (c1Constrs ++ c2Constrs, c1Tpe, Type.Impure)
-          case ResolvedAst.ConWhiteList(wl) => for {
-            (constrs, tpe, _) <- visitExp(wl)
-            resultTpe <- unifyTypeM(tpe, Type.Apply(Type.Array, Type.Str), loc)
-            resultEff = Type.Impure
-          } yield (constrs, resultTpe, resultEff)
-          case ResolvedAst.ConBase(_) => InferMonad.point((List(), Type.Unit, Type.Impure))
-        }
-
+        // TODO(LBS): con could be type checked
         for {
-          (conConstrs, _, _) <- visitCon(con)
+          conTpe <- liftM(con)
           (funConstrs, funTpe, funEff) <- visitExp(fun)
-        } yield (conConstrs ++ funConstrs, funTpe, funEff)
+        } yield (funConstrs, funTpe, funEff)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         //
@@ -1754,9 +1734,8 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
 
       case ResolvedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp, subst0)
-        val p = pol.map(visitExp(_, subst0))
         val eff = Type.Impure
-        TypedAst.Expression.NewChannel(e, p, Type.mkChannel(tpe), eff, loc)
+        TypedAst.Expression.NewChannel(e, pol, Type.mkChannel(tpe), eff, loc)
 
       case ResolvedAst.Expression.GetChannel(exp, tvar, loc) =>
         val e = visitExp(exp, subst0)
@@ -1787,14 +1766,8 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         TypedAst.Expression.Spawn(e, tpe, eff, loc)
 
       case ResolvedAst.Expression.Con(con, fun, loc) =>
-        def visitCon(con: ResolvedAst.ConRule): TypedAst.ConRule = con match {
-          case ResolvedAst.ConArrow(c1, c2) => TypedAst.ConArrow(visitCon(c1), visitCon(c2))
-          case ResolvedAst.ConWhiteList(wl) => TypedAst.ConWhiteList(visitExp(wl, subst0))
-          case ResolvedAst.ConBase(t) => TypedAst.ConBase(t)
-        }
-        val conVal = visitCon(con)
         val funVal = visitExp(fun, subst0)
-        TypedAst.Expression.Con(conVal, funVal, funVal.tpe, funVal.eff, loc)
+        TypedAst.Expression.Con(con, funVal, funVal.tpe, funVal.eff, loc)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         val e = visitExp(exp, subst0)

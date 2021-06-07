@@ -9,6 +9,14 @@ sealed trait TypeConstructor {
 
 object TypeConstructor {
 
+  case object WildCard extends TypeConstructor {
+    def kind: Kind = Kind.Star
+  }
+
+  case class WhiteList(names: Seq[Name.NName]) extends TypeConstructor {
+    def kind: Kind = Kind.Star ->: Kind.Star
+  }
+
   /**
     * A type constructor that represent the Unit type.
     */
