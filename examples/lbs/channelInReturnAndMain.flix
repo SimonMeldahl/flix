@@ -2,6 +2,7 @@
 /// remake newChannel to use second class values or fix main ref
 /// make inner contracts
 /// fix random print
+/// explore sending inner channels to yourself
 def main(_args: Array[String]): Int & Impure =
     let (_n, c) = con((Int, ?), B.t());
     c <- 1;

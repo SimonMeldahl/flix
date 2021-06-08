@@ -629,7 +629,7 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     def Primary: Rule1[ParsedAst.Expression] = rule {
       LetMatch | LetMatchStar | LetUse | LetImport | IfThenElse | Choose | Match | LambdaMatch | TryCatch | Lambda | Tuple |
         RecordOperation | RecordLiteral | Block | RecordSelectLambda | NewChannel |
-        GetChannel | SelectChannel | Con | Spawn | Lazy | Force | Intrinsic | ArrayLit | ArrayNew |
+        GetChannel | SelectChannel | Spawn | Lazy | Force | Intrinsic | ArrayLit | ArrayNew |
         FNil | FSet | FMap | ConstraintSet | FixpointProject | FixpointSolveWithProject | FixpointQueryWithSelect |
         ConstraintSingleton | Interpolation | Literal | Existential | Universal |
         UnaryLambda | FName | Tag | Hole
@@ -821,12 +821,6 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
       SP ~ keyword("spawn") ~ WS ~ Expression ~ SP ~> ParsedAst.Expression.Spawn
     }
 
-    def Con: Rule1[ParsedAst.Expression.Con] = {
-      rule {
-        SP ~ keyword("con") ~ "(" ~ optWS ~ Type ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con
-      }
-    }
-
     def Lazy: Rule1[ParsedAst.Expression.Lazy] = rule {
       SP ~ keyword("lazy") ~ WS ~ Expression ~ SP ~> ParsedAst.Expression.Lazy
     }
@@ -852,7 +846,13 @@ class Parser(val source: Source) extends org.parboiled2.Parser {
     }
 
     def ArrayStore: Rule1[ParsedAst.Expression] = rule {
-      Apply ~ optional(oneOrMore(optWS ~ "[" ~ optWS ~ Expression ~ optWS ~ "]") ~ optWS ~ "=" ~ optWS ~ Expression ~ SP ~> ParsedAst.Expression.ArrayStore)
+      Con ~ optional(oneOrMore(optWS ~ "[" ~ optWS ~ Expression ~ optWS ~ "]") ~ optWS ~ "=" ~ optWS ~ Expression ~ SP ~> ParsedAst.Expression.ArrayStore)
+    }
+
+    def Con: Rule1[ParsedAst.Expression] = {
+      rule {
+        (SP ~ keyword("con") ~ "(" ~ optWS ~ Type ~ optWS ~ "," ~ optWS ~ Expression ~ optWS ~ ")" ~ SP ~> ParsedAst.Expression.Con) | Apply
+      }
     }
 
     def Apply: Rule1[ParsedAst.Expression] = rule {

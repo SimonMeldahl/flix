@@ -136,23 +136,22 @@ object Value {
   type KLabel = List[String]
 
   def kLabelString(kLabel: KLabel): String = {
-    if (kLabel.isEmpty) "<main>"
-    else kLabel.mkString(".")
+    if (kLabel.isEmpty) "/"
+    else kLabel.mkString("/")
   }
 
   type Policy = Option[List[KLabel]]
 
   def polsString(pols: List[KLabel]): String =
-    pols.map(kLabelString).mkString("{", ",", "}")
+    pols.map(kLabelString).mkString("<", ",", ">")
 
   def polsString(pols: Policy): String =
-    pols.map(polsString).getOrElse("{T}")
+    pols.map(polsString).getOrElse("{unrestricted}")
 
   private def polsContains(pols: Policy, currentLabel: KLabel): Boolean = pols match {
     case Some(value) => value.contains(currentLabel)
     case None => true
   }
-
 
   sealed trait Channel extends Value {
     // TODO(LBS): delete implicit loc or add prints to --debug
@@ -160,20 +159,34 @@ object Value {
 
     def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef
 
-    def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel
+    def put(e: AnyRef, currentLabel: KLabel, contract: MonoType)(implicit loc: SourceLocation): Channel
 
     def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit
 
     def pols: Policy
+
+    def tpe: MonoType
   }
 
   object Channel {
+
+    def untangle(va: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
+      val Value.Tuple(e :: fromLabel :: con :: innerContracts :: Nil) = va
+      reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType], innerContracts.asInstanceOf[List[LabeledContract]])
+    }
+
+    case class LabeledContract(from: KLabel, to: KLabel, contract: MonoType)
+
+    def tangle(e: AnyRef, currentLabel: KLabel, contract: MonoType, innerContracts: List[LabeledContract]): Unit = {
+      Value.Tuple(List(e, currentLabel, contract, innerContracts))
+    }
+
     def select(selectObjects: List[AnyRef], hasDefault: Boolean, currentLabel: KLabel)(implicit loc: SourceLocation): SelectChoice = {
       // Create new Condition and channelLock the current thread
       val selectLock: Lock = new ReentrantLock()
       val condition: Condition = selectLock.newCondition()
       val javaChannels: List[JavaChannel] = selectObjects.map {
-        case Value.ChannelImpl(c, _) => c
+        case Value.ChannelImpl(c, _, _) => c
         case g: Value.Guard => g.getChannel.c
         case ref => throw InternalRuntimeException(s"Unexpected non-channel or non-guard value: ${ref.getClass.getName}.")
       }
@@ -251,30 +264,33 @@ object Value {
     }
   }
 
-  case class ChannelImpl(c: JavaChannel, pols: Policy) extends Channel {
+  case class ChannelImpl(c: JavaChannel, pols: Policy, tpe: MonoType) extends Channel {
     override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
       println(s"get channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      c.get()
+      Channel.untangle(c.get(), currentLabel)
     }
 
     override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
       println(s"tryget channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      c.tryGet()
+      val out = c.tryGet()
+      if (out == null) null else {
+        Channel.untangle(out, currentLabel)
+      }
     }
 
-    override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = {
+    override def put(e: AnyRef, currentLabel: KLabel, contract: MonoType)(implicit loc: SourceLocation): Channel = {
       println(s"put channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      c.put(e)
+      c.put(Channel.tangle(e, currentLabel, contract, Nil))
       this
     }
 
     override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = ()
   }
 
-  case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy) extends Channel {
+  case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy, innerContract: MonoType, tpe: MonoType, prescibedContracts: List[Channel.LabeledContract]) extends Channel {
     def getChannel(implicit loc: SourceLocation): ChannelImpl = lit match {
       case c: ChannelImpl => c
       case g: Guard => g.getChannel
@@ -283,6 +299,20 @@ object Value {
     def getAllLabels: List[(KLabel, KLabel, Policy)] = lit match {
       case _: ChannelImpl => List((to, from, pols))
       case g: Guard => (to, from, pols) :: g.getAllLabels
+    }
+
+    // [new, ..., old] aka. new :: ... :: old :: Nil
+    // prescribed are newer than innerContract
+    def getAllPrescribedContracts: List[Channel.LabeledContract] = lit match {
+      case _: ChannelImpl => prescibedContracts
+      case g: Guard => g.getAllPrescribedContracts
+    }
+
+    def getAllInnerContracts: List[Channel.LabeledContract] = {
+        Channel.LabeledContract(from, to, innerContract) :: (lit match {
+        case _: ChannelImpl => Nil
+        case g: Guard => g.getAllInnerContracts
+      })
     }
 
     override def toString: String = {
@@ -294,19 +324,22 @@ object Value {
     override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
       println(s"get channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      getChannel.c.get()
+      Channel.untangle(getChannel.c.get(), currentLabel)
     }
 
     override def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
       println(s"tryget channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      getChannel.c.tryGet()
+      val out = getChannel.c.tryGet()
+      if (out == null) null else {
+        Channel.untangle(out, currentLabel)
+      }
     }
 
-    override def put(e: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): Channel = {
+    override def put(e: AnyRef, currentLabel: KLabel, contract: MonoType)(implicit loc: SourceLocation): Channel = {
       println(s"put channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      getChannel.c.put(e)
+      getChannel.c.put(Channel.tangle(e, currentLabel, contract, getAllInnerContracts))
       this
     }
 
@@ -315,10 +348,10 @@ object Value {
 
       if (!polsContains(pols, currentLabel)) error(pols, to)
       lit match {
-        case ChannelImpl(_, p@Some(_)) =>
+        case ChannelImpl(_, p@Some(_), _) =>
           if (!polsContains(p, currentLabel))
             error(p, from)
-        case ChannelImpl(_, None) => ()
+        case ChannelImpl(_, None, _) => ()
         case l: Guard => l.checkAccess(currentLabel)
       }
     }

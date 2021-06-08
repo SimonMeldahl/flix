@@ -383,7 +383,6 @@ object PrettyPrinter {
           vt.text("Channel")
           vt.text(" ")
           visitExp(exp)
-          pol.foreach(p => vt.text(_.toString))
 
         case Expression.PutChannel(exp1, exp2, tpe, loc) =>
           visitExp(exp1)

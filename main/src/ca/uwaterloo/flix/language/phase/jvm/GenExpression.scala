@@ -1003,10 +1003,6 @@ object GenExpression {
       visitor.visitTypeInsn(NEW, JvmName.Channel.toInternalName)
       visitor.visitInsn(DUP)
       compileExpression(exp, visitor, currentClass, lenv0, entryPoint)
-      pol.foreach { p =>
-        compileExpression(p, visitor, currentClass, lenv0, entryPoint)
-        visitor.visitInsn(POP)
-      }
       visitor.visitMethodInsn(INVOKESPECIAL, JvmName.Channel.toInternalName, "<init>", "(I)V", false)
 
     case Expression.GetChannel(exp, tpe, loc) =>

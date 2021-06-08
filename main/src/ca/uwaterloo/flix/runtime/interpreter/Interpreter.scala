@@ -29,6 +29,7 @@ import ca.uwaterloo.flix.util.{InternalRuntimeException, Validation}
 import flix.runtime.{HoleError, ProxyObject}
 
 import java.math.BigInteger
+import scala.annotation.tailrec
 
 object Interpreter extends Phase[Root, Array[String] => Int] {
 
@@ -280,19 +281,17 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
       case Expression.NewChannel(exp, pol, tpe, loc) =>
         // TODO(LBS): change to new literal format
         val size = cast2int32(eval(exp, env0, lenv0, root, currentLabel))
-        val pols = pol map { value =>
-          val Value.Arr(elms, _) = cast2array(eval(value, env0, lenv0, root, currentLabel))
-          elms.map(cast2str(_).split('.').toList).toList.map(f => if (f == List("<main>")) List() else f)
-        }
-        Value.ChannelImpl(new JavaChannel(size), pols)
+        val pols = pol.map(value => nameToKLabel(value.names))
+        Value.ChannelImpl(new JavaChannel(size), pols, tpe)
 
       case Expression.GetChannel(exp, _, _) =>
         val c = cast2channel(eval(exp, env0, lenv0, root, currentLabel))
-        val Value.Tuple(e :: fromLabel :: con :: Nil) = c.get(currentLabel)
-        reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType])
+        c.get(currentLabel)
 
-      case pc@Expression.PutChannel(exp1, exp2, tpe, loc) =>
-        evalPutChannel(pc, env0, lenv0, currentLabel, MonoType.WildCard, root)
+      case Expression.PutChannel(exp1, exp2, _, loc) =>
+        val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
+        val e2 = eval(exp2, env0, lenv0, root, currentLabel)
+        c.put(e2, currentLabel, MonoType.WildCard)
 
       case Expression.SelectChannel(rules, default, _, _) =>
         // Evaluate all Channel expressions
@@ -314,10 +313,8 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
 
         // The default was not chosen. Find the matching rule
         val selectedRule = rs.apply(selectChoice.branchNumber)
-        val Value.Tuple(e :: fromLabel :: con :: Nil) = selectChoice.element
-        val channelOutput = reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType])
         // Bind the sym of the rule to the element from the selected channel
-        val newEnv = env0 + (selectedRule._1.toString -> channelOutput)
+        val newEnv = env0 + (selectedRule._1.toString -> selectChoice.element)
         // Evaluate the expression of the selected rule
         eval(selectedRule._3, newEnv, lenv0, root, currentLabel)
 
@@ -355,13 +352,6 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     }
   }
 
-  private def evalPutChannel(exp: Expression.PutChannel, env0: Map[String, AnyRef], lenv0: Map[Symbol.LabelSym, Expression], currentLabel: KLabel, con: MonoType, root: Root)(implicit flix: Flix): AnyRef = {
-    val Expression.PutChannel(exp1, exp2, _, loc) = exp
-    implicit val locc: SourceLocation = loc
-    val c = cast2channel(eval(exp1, env0, lenv0, root, currentLabel))
-    val e2 = eval(exp2, env0, lenv0, root, currentLabel)
-    c.put(Value.Tuple(List(e2, currentLabel, con)), currentLabel)
-  }
 
   /**
     * Applies the given unary semantic operator `sop` to the value of the expression `exp0` under the environment `env0`
@@ -715,26 +705,86 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
   }
 
   // Check type of contracts at runtime here
-  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef, con: MonoType)(implicit loc: SourceLocation): AnyRef = (value, con) match {
+  def reduceK(fromLabel: KLabel, toLabel: KLabel, value: AnyRef, con: MonoType, innnerContracts: List[Value.Channel.LabeledContract])(implicit loc: SourceLocation): AnyRef = (value, con) match {
     case (Value.True | Value.False, MonoType.Bool | MonoType.WildCard) => value
     case (Value.Unit, MonoType.Unit | MonoType.WildCard) => value
     case (Value.Int32(_), MonoType.Int32 | MonoType.WildCard) => value
     case (Value.Int64(_), MonoType.Int64 | MonoType.WildCard) => value
     case (Value.Str(_), MonoType.Str | MonoType.WildCard) => value
-    case (Value.Arr(elms, t1), MonoType.Array(t2)) if t1 == t2 => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
+    case (Value.Arr(elms, t1), MonoType.Array(t2)) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
     case (Value.Arr(elms, t1), MonoType.WildCard) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
     case (Value.Tuple(elms1), MonoType.Tuple(elms2)) if elms1.length == elms2.length => Value.Tuple(elms1.zip(elms2).map{
       case (e1, e2) => reduceK(fromLabel, toLabel, e1, e2)
     })
     case (Value.Tuple(elms1), MonoType.WildCard) => Value.Tuple(elms1.map(reduceK(fromLabel, toLabel, _, MonoType.WildCard)))
-      // todo(LBS): inner contracts x2
-    case (c: Value.Channel, MonoType.WhiteList(names, _)) => Value.Guard(c, fromLabel, toLabel, Some(names.toList.map(n => n.idents.map(i => i.name))))
-    case (c: Value.Channel, MonoType.WildCard | _: MonoType.Channel) => Value.Guard(c, fromLabel, toLabel, c.pols)
+    case (c: Value.Channel, MonoType.WhiteList(names, t2)) => Value.Guard(c, fromLabel, toLabel, Some(nameToKLabel(names)), t2, c.tpe)
+    case (c: Value.Channel, MonoType.WildCard) => Value.Guard(c, fromLabel, toLabel, c.pols, MonoType.WildCard, c.tpe)
+    case (c: Value.Channel, MonoType.Channel(t2)) => Value.Guard(c, fromLabel, toLabel, c.pols, t2, c.tpe)
     case (_: Value.Closure | _: Value.Lambda, MonoType.Arrow(args, result)) => Value.Lambda(value, args, result, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, MonoType.WildCard) => Value.Lambda(value, List(MonoType.WildCard), MonoType.WildCard, fromLabel, toLabel)
-    case (v, MonoType.WildCard) => v // TODO(LBS): This is not safe for values with channel inside
+    case (v, MonoType.WildCard) => println("warning: unsafe reduceK"); v // TODO(LBS): This is not safe for values with channel inside
     case _ => throw InternalRuntimeException(s"Wrong types on contract l@$con @$loc")
   }
+
+  def monoTypeEquality(tpe1: MonoType, tpe2: MonoType): Boolean = (tpe1, tpe2) match {
+    case (_, MonoType.WildCard) => true
+    case (MonoType.WildCard, _) => true
+    case (MonoType.Unit, MonoType.Unit) => true
+    case (MonoType.Bool, MonoType.Bool) => true
+    case (MonoType.Char, MonoType.Char) => true
+    case (MonoType.Float32, MonoType.Float32) => true
+    case (MonoType.Float64, MonoType.Float64) => true
+    case (MonoType.Int8, MonoType.Int8) => true
+    case (MonoType.Int16, MonoType.Int16) => true
+    case (MonoType.Int32, MonoType.Int32) => true
+    case (MonoType.Int64, MonoType.Int64) => true
+    case (MonoType.BigInt, MonoType.BigInt) => true
+    case (MonoType.Str, MonoType.Str) => true
+    case (MonoType.Array(tpe1), MonoType.Array(tpe2)) => monoTypeEquality(tpe1, tpe2)
+    case (MonoType.Channel(tpe1), MonoType.Channel(tpe2)) => monoTypeEquality(tpe1, tpe2)
+    case (MonoType.WhiteList(_, tpe1), MonoType.WhiteList(_, tpe2)) => monoTypeEquality(tpe1, tpe2)
+    case (MonoType.Lazy(tpe1), MonoType.Lazy(tpe2)) => monoTypeEquality(tpe1, tpe2)
+    case (MonoType.Ref(tpe1), MonoType.Ref(tpe2)) => monoTypeEquality(tpe1, tpe2)
+    case (MonoType.Tuple(elms1), MonoType.Tuple(elms2)) => monoTypeEquality(elms1, elms2)
+    case (MonoType.Enum(sym1, args1), MonoType.Enum(sym2, args2)) => sym1 == sym2 && monoTypeEquality(args1, args2)
+    case (MonoType.Arrow(args1, result1), MonoType.Arrow(args2, result2)) => monoTypeEquality(args1, args2) && monoTypeEquality(result1, result2)
+    case (MonoType.RecordEmpty(), MonoType.RecordEmpty()) => ???
+    case (MonoType.RecordExtend(_, _, _), MonoType.RecordExtend(_, _, _)) => ???
+    case (MonoType.SchemaEmpty(), MonoType.SchemaEmpty()) => ???
+    case (MonoType.SchemaExtend(_, _, _), MonoType.SchemaExtend(_, _, _)) => ???
+    case (MonoType.Relation(_), MonoType.Relation(_)) => ???
+    case (MonoType.Lattice(_), MonoType.Lattice(_)) => ???
+    case (MonoType.Native(_), MonoType.Native(_)) => ???
+    case (MonoType.Var(id1), MonoType.Var(id2)) => id1 == id2
+  }
+
+  def monoTypeEquality(tpe1: List[MonoType], tpe2: List[MonoType]): Boolean =
+    tpe1.zip(tpe2).forall(p => monoTypeEquality(p._1, p._2))
+
+  def getInnerInnerContracts(value: AnyRef, innerContracts: List[Value.Channel.LabeledContract])(implicit loc: SourceLocation): List[Value.Channel.LabeledContract] = innerContracts match {
+    case Nil => Nil
+    case Value.Channel.LabeledContract(from, to, contract) :: ictail =>
+      val newContract = (value, contract) match {
+        case (Value.Arr(elms, t1), MonoType.Array(t2)) if t1 == t2 =>
+        case (Value.Arr(elms, t1), MonoType.WildCard) => Value.Arr(elms.map(reduceK(fromLabel, toLabel, _, con)), t1)
+        case (Value.Tuple(elms1), MonoType.Tuple(elms2)) if elms1.length == elms2.length => Value.Tuple(elms1.zip(elms2).map{
+          case (e1, e2) => reduceK(fromLabel, toLabel, e1, e2)
+        })
+        case (Value.Tuple(elms1), MonoType.WildCard) => Value.Tuple(elms1.map(reduceK(fromLabel, toLabel, _, MonoType.WildCard)))
+        case (c: Value.Channel, MonoType.WhiteList(names, t2)) => Value.Guard(c, fromLabel, toLabel, Some(nameToKLabel(names)), t2, c.tpe)
+        case (c: Value.Channel, MonoType.WildCard) => Value.Guard(c, fromLabel, toLabel, c.pols, MonoType.WildCard, c.tpe)
+        case (c: Value.Channel, MonoType.Channel(t2)) => Value.Guard(c, fromLabel, toLabel, c.pols, t2, c.tpe)
+        case (_: Value.Closure | _: Value.Lambda, MonoType.Arrow(args, result)) => Value.Lambda(value, args, result, fromLabel, toLabel)
+        case (_: Value.Closure | _: Value.Lambda, MonoType.WildCard) => Value.Lambda(value, List(MonoType.WildCard), MonoType.WildCard, fromLabel, toLabel)
+        case (v, MonoType.WildCard) => println("warning: unsafe reduceK"); v // TODO(LBS): This is not safe for values with channel inside
+        case _ => throw InternalRuntimeException(s"Wrong types on contract l@$con @$loc")
+      }
+      Value.Channel.LabeledContract(from, to, newContract) :: getInnerInnerContracts(value, ictail)
+  }
+
+
+  def nameToKLabel(ns: Seq[Name.NName]): List[KLabel] =
+    ns.toList.map(n => n.idents.map(i => i.name))
 
   /**
     * Evaluates the given list of expressions `exps` under the given environment `env0` to a list of values.
