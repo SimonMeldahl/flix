@@ -10,8 +10,8 @@ namespace B {
 }
 
 def main(_args: Array[String]): Int & Impure =
-    let c = chan Channel[Int] 100 restricted ["A"];
-    let innerc = chan Int 100 restricted ["B"];
+    let c = chan Channel[Int] 100 restricted <A>;
+    let innerc = chan Int 100 restricted <B>;
     innerc <- 0 <- 0;
     c <- innerc;
     A.f(c);

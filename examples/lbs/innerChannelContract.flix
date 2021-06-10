@@ -1,5 +1,5 @@
 def main(_args: Array[String]): Int & Impure =
-    A.start()
+    A.start(); 0
 
 namespace A {
     pub def start(): Unit & Impure =
@@ -8,8 +8,8 @@ namespace A {
 
         /// guard A ->
         B.receive(con(<A, B>[<A>[Int]], c));
-        C.receive(con(<A, B>[<>[Int]], c));
-        0
+        C.receive(con(<A, C>[<>[Int]], c));
+        ()
 }
 
 namespace B {

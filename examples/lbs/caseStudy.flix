@@ -1,5 +1,6 @@
 use List.{range, foreach};
 use ToString.{toString};
+
 def main(_args: Array[String]): Int & Impure =
   let connectionChannel = chan Channel[String] 100 restricted <Processor>;
   let resultChannel = chan String 0 restricted <Processor>;

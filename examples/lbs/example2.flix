@@ -11,5 +11,5 @@ namespace B {
 def main(_args: Array[String]): Int & Impure =
     let c = chan Int 100;
     let g = () -> c;
-    A.f(con(["A", "B"], g()));
+    A.f(con(<A, B>[?], g()));
     <- c

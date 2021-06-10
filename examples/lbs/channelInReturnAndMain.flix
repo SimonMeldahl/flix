@@ -1,10 +1,5 @@
-/// remove channels in main from all examples
-/// remake newChannel to use second class values or fix main ref
-/// make inner contracts
-/// fix random print
-/// explore sending inner channels to yourself
 def main(_args: Array[String]): Int & Impure =
-    let (_n, c) = con((Int, ?), B.t());
+    let (_n, c) = con((Int, </>[Int]), B.t());
     c <- 1;
     0
 
@@ -15,7 +10,7 @@ namespace A {
 
 namespace B {
     pub def t(): (Int, Channel[Int]) & Impure =
-        let c = chan Int 100 restricted ["A", "B", "<main>"];
+        let c = chan Int 100 restricted <A, B, />;
         c <- 2;
         (2, c)
 }

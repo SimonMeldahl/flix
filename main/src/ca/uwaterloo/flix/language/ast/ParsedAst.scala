@@ -904,9 +904,7 @@ object ParsedAst {
       */
     case class Spawn(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
-    case class Con(sp1: SourcePosition, con: ParsedAst.Type, fun: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression {
-      println(con)
-    }
+    case class Con(sp1: SourcePosition, con: ParsedAst.Type, fun: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
       * Lazy Expression.

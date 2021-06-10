@@ -171,14 +171,14 @@ object Value {
   object Channel {
 
     def untangle(va: AnyRef, currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
-      val Value.Tuple(e :: fromLabel :: con :: innerContracts :: Nil) = va
-      reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType], innerContracts.asInstanceOf[List[LabeledContract]])
+      val Value.Tuple(e :: fromLabel :: con :: Nil) = va
+      reduceK(fromLabel.asInstanceOf[KLabel], currentLabel, e, con.asInstanceOf[MonoType])
     }
 
     case class LabeledContract(from: KLabel, to: KLabel, contract: MonoType)
 
-    def tangle(e: AnyRef, currentLabel: KLabel, contract: MonoType, innerContracts: List[LabeledContract]): Unit = {
-      Value.Tuple(List(e, currentLabel, contract, innerContracts))
+    def tangle(e: AnyRef, currentLabel: KLabel, contract: MonoType): AnyRef = {
+      Value.Tuple(List(e, currentLabel, contract))
     }
 
     def select(selectObjects: List[AnyRef], hasDefault: Boolean, currentLabel: KLabel)(implicit loc: SourceLocation): SelectChoice = {
@@ -283,14 +283,14 @@ object Value {
     override def put(e: AnyRef, currentLabel: KLabel, contract: MonoType)(implicit loc: SourceLocation): Channel = {
       println(s"put channel with no guard ${polsString(pols)} in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      c.put(Channel.tangle(e, currentLabel, contract, Nil))
+      c.put(Channel.tangle(e, currentLabel, contract))
       this
     }
 
     override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = ()
   }
 
-  case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy, innerContract: MonoType, tpe: MonoType, prescibedContracts: List[Channel.LabeledContract]) extends Channel {
+  case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy, tpe: MonoType) extends Channel {
     def getChannel(implicit loc: SourceLocation): ChannelImpl = lit match {
       case c: ChannelImpl => c
       case g: Guard => g.getChannel
@@ -301,25 +301,9 @@ object Value {
       case g: Guard => (to, from, pols) :: g.getAllLabels
     }
 
-    // [new, ..., old] aka. new :: ... :: old :: Nil
-    // prescribed are newer than innerContract
-    def getAllPrescribedContracts: List[Channel.LabeledContract] = lit match {
-      case _: ChannelImpl => prescibedContracts
-      case g: Guard => g.getAllPrescribedContracts
-    }
-
-    def getAllInnerContracts: List[Channel.LabeledContract] = {
-        Channel.LabeledContract(from, to, innerContract) :: (lit match {
-        case _: ChannelImpl => Nil
-        case g: Guard => g.getAllInnerContracts
-      })
-    }
-
-    override def toString: String = {
-      getAllLabels.map(l =>
-        if (l._1 == l._2) s"<-${kLabelString(l._1)}-${polsString(l._3)}-"
-        else s"${kLabelString(l._1)} <-${polsString(l._3)}- ${kLabelString(l._2)}").mkString("[", ", ", "]")
-    }
+    override def toString: String = getAllLabels.map(l =>
+      s"${kLabelString(l._1)}<-${polsString(l._3)}-${kLabelString(l._2)}"
+    ).mkString("[", " ", "]")
 
     override def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef = {
       println(s"get channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
@@ -339,7 +323,7 @@ object Value {
     override def put(e: AnyRef, currentLabel: KLabel, contract: MonoType)(implicit loc: SourceLocation): Channel = {
       println(s"put channel with guard $toString in ${kLabelString(currentLabel)} @$loc")
       checkAccess(currentLabel)
-      getChannel.c.put(Channel.tangle(e, currentLabel, contract, getAllInnerContracts))
+      getChannel.c.put(Channel.tangle(e, currentLabel, contract))
       this
     }
 
