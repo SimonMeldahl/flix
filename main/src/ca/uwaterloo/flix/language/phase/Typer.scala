@@ -1287,7 +1287,6 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         } yield (constrs, resultTyp, resultEff)
 
       case ResolvedAst.Expression.Con(con, fun, loc) =>
-        // TODO(LBS): con could be type checked
         for {
           conTpe <- liftM(con)
           (funConstrs, funTpe, funEff) <- visitExp(fun)

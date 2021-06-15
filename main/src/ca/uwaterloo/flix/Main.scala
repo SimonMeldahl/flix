@@ -182,7 +182,6 @@ object Main {
     // evaluate main.
     if (cmdOpts.xinterpreter) {
       try {
-        //TODO(LBS) chump timer
         val timer = new Timer(flix.interpret())
         timer.getResult match {
           case Validation.Success(compilationResult) =>
@@ -197,15 +196,6 @@ object Main {
             // Exit with the returned exit code.
             System.exit(exitCode)
 
-            //TODO(LBS) no benchmarks or test here
-//            if (cmdOpts.benchmark) {
-//              Benchmarker.benchmark(compilationResult, new PrintWriter(System.out, true))(options)
-//            }
-//
-//            if (cmdOpts.test) {
-//              val results = Tester.test(compilationResult)
-//              Console.println(results.output.fmt)
-//            }
           case Validation.Failure(errors) =>
             errors.sortBy(_.source.name).foreach(e => println(e.message.fmt))
             println()

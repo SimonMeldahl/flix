@@ -722,7 +722,7 @@ object Interpreter extends Phase[Root, Array[String] => Int] {
     case (_: Value.Closure | _: Value.Lambda, MonoType.Arrow(args, result)) => Value.Lambda(value, args, result, fromLabel, toLabel)
     case (_: Value.Closure | _: Value.Lambda, MonoType.WildCard) => Value.Lambda(value, List(MonoType.WildCard), MonoType.WildCard, fromLabel, toLabel)
     case (v: Value.Tag, MonoType.WildCard) => println("unsafe reduceK on tag"); v
-    case (v, MonoType.WildCard) => println("unsafe reduceK"); v // TODO(LBS): This is not safe for values with channel inside
+    case (v, MonoType.WildCard) => println("unsafe reduceK"); v
     case _ => throw InternalRuntimeException(s"Wrong types on contract l@$con @$loc")
   }
 
