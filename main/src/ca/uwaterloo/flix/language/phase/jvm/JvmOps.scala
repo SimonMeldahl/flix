@@ -678,7 +678,7 @@ object JvmOps {
       case Expression.PutStaticField(field, exp, tpe, loc) =>
         visitExp(exp)
 
-      case Expression.NewChannel(exp, tpe, loc) => visitExp(exp)
+      case Expression.NewChannel(exp, pol, tpe, loc) => visitExp(exp)
 
       case Expression.GetChannel(exp, tpe, loc) => visitExp(exp)
 
@@ -692,6 +692,8 @@ object JvmOps {
 
       case Expression.Spawn(exp, tpe, loc) => visitExp(exp)
 
+      case Expression.Con(_, fun, _, _) => visitExp(fun)
+
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp)
 
       case Expression.Force(exp, tpe, loc) => visitExp(exp)
@@ -699,6 +701,8 @@ object JvmOps {
       case Expression.HoleError(sym, tpe, loc) => Set.empty
 
       case Expression.MatchError(tpe, loc) => Set.empty
+
+      case Expression.K(exp, from, to, con, tpe, loc) => ???
     }
 
     // TODO: Look for closures in other places.
@@ -753,6 +757,8 @@ object JvmOps {
 
   // TODO: Should be removed.
   private def hackMonoType2Type(tpe: MonoType): Type = tpe match {
+    case MonoType.WildCard => Type.mkWildCard(SourceLocation.Unknown)
+    case MonoType.WhiteList(names, tpe) => Type.mkWhiteList(hackMonoType2Type(tpe), names, SourceLocation.Unknown)
     case MonoType.Var(id) => Type.Var(id, Kind.Star)
     case MonoType.Unit => Type.Unit
     case MonoType.Bool => Type.Bool
@@ -980,7 +986,7 @@ object JvmOps {
       case Expression.PutStaticField(field, exp, tpe, loc) =>
         visitExp(exp) + tpe
 
-      case Expression.NewChannel(exp, tpe, loc) => visitExp(exp) + tpe
+      case Expression.NewChannel(exp, pol, tpe, loc) => visitExp(exp) + tpe
 
       case Expression.GetChannel(exp, tpe, loc) => visitExp(exp) + tpe
 
@@ -993,6 +999,9 @@ object JvmOps {
 
       case Expression.Spawn(exp, tpe, loc) => visitExp(exp) + tpe
 
+      case Expression.Con(con, fun, tpe, _) =>
+        visitExp(fun) + tpe + con
+
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp) + tpe
 
       case Expression.Force(exp, tpe, loc) => visitExp(exp) + tpe
@@ -1000,6 +1009,8 @@ object JvmOps {
       case Expression.HoleError(sym, tpe, loc) => Set(tpe)
 
       case Expression.MatchError(tpe, loc) => Set(tpe)
+
+      case Expression.K(exp, from, to, con, tpe, loc) => ???
     }
 
     // TODO: Magnus: Look for types in other places.
@@ -1025,6 +1036,8 @@ object JvmOps {
     // but not have all its tags constructed as expressions.
     //
     tpe match {
+      case MonoType.WildCard => Set(tpe)
+      case MonoType.WhiteList(names, tpe) => nestedTypesOf(tpe) + tpe
       case MonoType.Unit => Set(tpe)
       case MonoType.Bool => Set(tpe)
       case MonoType.Char => Set(tpe)

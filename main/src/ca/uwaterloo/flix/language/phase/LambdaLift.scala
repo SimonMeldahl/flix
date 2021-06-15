@@ -313,9 +313,9 @@ object LambdaLift extends Phase[SimplifiedAst.Root, LiftedAst.Root] {
         val e = visitExp(exp)
         LiftedAst.Expression.PutStaticField(field, e, tpe, loc)
 
-      case SimplifiedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case SimplifiedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        LiftedAst.Expression.NewChannel(e, tpe, loc)
+        LiftedAst.Expression.NewChannel(e, pol, tpe, loc)
 
       case SimplifiedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)
@@ -341,6 +341,10 @@ object LambdaLift extends Phase[SimplifiedAst.Root, LiftedAst.Root] {
       case SimplifiedAst.Expression.Spawn(exp, tpe, loc) =>
         val e = visitExp(exp)
         LiftedAst.Expression.Spawn(e, tpe, loc)
+
+      case SimplifiedAst.Expression.Con(con, fun, tpe, loc) =>
+        val f = visitExp(fun)
+        LiftedAst.Expression.Con(con, f, tpe, loc)
 
       case SimplifiedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)

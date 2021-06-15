@@ -287,7 +287,7 @@ object PatternExhaustiveness extends Phase[TypedAst.Root, TypedAst.Root] {
             _ <- checkPats(exp, root)
           } yield tast
 
-        case Expression.NewChannel(exp, _, _, _) => for {
+        case Expression.NewChannel(exp, _, _, _, _) => for {
           _ <- checkPats(exp, root)
         } yield tast
 
@@ -314,6 +314,11 @@ object PatternExhaustiveness extends Phase[TypedAst.Root, TypedAst.Root] {
         case Expression.Spawn(exp, _, _, _) => for {
           _ <- checkPats(exp, root)
         } yield tast
+
+        case Expression.Con(con, fun, tpe, eff, loc) =>
+          for {
+            _ <- checkPats(fun, root)
+          } yield tast
 
         case Expression.Lazy(exp, _, _) => for {
           _ <- checkPats(exp, root)

@@ -22,11 +22,13 @@ import ca.uwaterloo.flix.language.phase._
 import ca.uwaterloo.flix.language.phase.jvm.JvmBackend
 import ca.uwaterloo.flix.language.{CompilationError, GenSym}
 import ca.uwaterloo.flix.runtime.CompilationResult
+import ca.uwaterloo.flix.runtime.interpreter.Interpreter
 import ca.uwaterloo.flix.util._
 import ca.uwaterloo.flix.util.vt.TerminalContext
 
 import java.nio.charset.Charset
 import java.nio.file.{Files, Path, Paths}
+import java.security.DrbgParameters.Capability
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
@@ -379,6 +381,35 @@ class Flix {
     result
   }
 
+  def codeInterpreter(typedAst: TypedAst.Root): Validation[Array[String] => Int, CompilationError] = {
+    // Initialize fork join pool.
+    initForkJoin()
+
+    // Construct the compiler pipeline.
+    val pipeline = Documentor |>
+      Lowering |>
+      Monomorph |>
+      Simplifier |>
+      ClosureConv |>
+      LambdaLift |>
+      Tailrec |>
+      Inliner |>
+      Optimizer |>
+      TreeShaker |>
+      VarNumbering |>
+      Finalize |>
+      Eraser |>
+      Interpreter
+
+    // Apply the pipeline to the parsed AST.
+    val result = pipeline.run(typedAst)(this)
+
+    // Shutdown fork join pool.
+    shutdownForkJoin()
+
+    // Return the result.
+    result
+  }
   /**
     * Compiles the given typed ast to an executable ast.
     */
@@ -386,6 +417,11 @@ class Flix {
     check() flatMap {
       case typedAst => codeGen(typedAst)
     }
+
+  def interpret(): Validation[Array[String] => Int, CompilationError] =
+    check() flatMap (
+      typedAst => codeInterpreter(typedAst)
+    )
 
   /**
     * Enters the phase with the given name.

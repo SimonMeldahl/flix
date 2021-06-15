@@ -209,7 +209,7 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
       case Expression.PutStaticField(_, exp, _, _, _) => visitExp(exp, lint0)
 
-      case Expression.NewChannel(exp, _, _, _) => visitExp(exp, lint0)
+      case Expression.NewChannel(exp, _, _, _, _) => visitExp(exp, lint0)
 
       case Expression.GetChannel(exp, _, _, _) => visitExp(exp, lint0)
 
@@ -221,6 +221,9 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
         }
 
       case Expression.Spawn(exp, _, _, _) => visitExp(exp, lint0)
+
+      case Expression.Con(_, fun, _, _, _) =>
+        visitExp(fun, lint0)
 
       case Expression.Lazy(exp, _, _) => visitExp(exp, lint0)
 
@@ -509,7 +512,7 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
     case (Expression.PutStaticField(field1, exp1, _, _, _), Expression.PutStaticField(field2, exp2, _, _, _)) if field1 == field2 =>
       unifyExp(exp1, exp2, metaVars)
 
-    case (Expression.NewChannel(exp1, _, _, _), Expression.NewChannel(exp2, _, _, _)) =>
+    case (Expression.NewChannel(exp1, _, _, _, _), Expression.NewChannel(exp2, _, _, _, _)) =>
       unifyExp(exp1, exp2, metaVars)
 
     case (Expression.GetChannel(exp1, _, _, _), Expression.GetChannel(exp2, _, _, _)) =>
@@ -528,6 +531,10 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
 
     case (Expression.Spawn(exp1, _, _, _), Expression.Spawn(exp2, _, _, _)) =>
       unifyExp(exp1, exp2, metaVars)
+
+    case (_: Expression.Con, _) => None
+
+    case (_, _: Expression.Con) => None
 
     case (Expression.FixpointConstraintSet(_, _, _, _), Expression.FixpointConstraintSet(_, _, _, _)) =>
       // NB: We currently do not perform unification inside constraint sets.
@@ -893,9 +900,9 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
         val e = apply(exp)
         Expression.PutStaticField(field, e, tpe, eff, loc)
 
-      case Expression.NewChannel(exp, tpe, eff, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
         val e = apply(exp)
-        Expression.NewChannel(e, tpe, eff, loc)
+        Expression.NewChannel(e, pol, tpe, eff, loc)
 
       case Expression.GetChannel(exp, tpe, eff, loc) =>
         val e = apply(exp)
@@ -916,6 +923,9 @@ object Linter extends Phase[TypedAst.Root, TypedAst.Root] {
       case Expression.Spawn(exp, tpe, eff, loc) =>
         val e = apply(exp)
         Expression.Spawn(e, tpe, eff, loc)
+
+      case Expression.Con(con, fun, tpe, eff, loc) =>
+        Expression.Con(con, apply(fun), tpe, eff, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = apply(exp)

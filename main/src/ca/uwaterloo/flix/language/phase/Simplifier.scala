@@ -239,9 +239,9 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         val e = visitExp(exp)
         SimplifiedAst.Expression.PutStaticField(field, e, tpe, loc)
 
-      case TypedAst.Expression.NewChannel(exp, tpe, eff, loc) =>
+      case TypedAst.Expression.NewChannel(exp, pol, tpe, eff, loc) =>
         val e = visitExp(exp)
-        SimplifiedAst.Expression.NewChannel(e, tpe, loc)
+        SimplifiedAst.Expression.NewChannel(e, pol, tpe, loc)
 
       case TypedAst.Expression.GetChannel(exp, tpe, eff, loc) =>
         val e = visitExp(exp)
@@ -270,6 +270,10 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         val lambdaTyp = Type.mkArrowWithEffect(Type.Unit, eff, e.tpe)
         val lambdaExp = SimplifiedAst.Expression.Lambda(List(), e, lambdaTyp, loc)
         SimplifiedAst.Expression.Spawn(lambdaExp, lambdaTyp, loc)
+
+      case TypedAst.Expression.Con(con, fun, tpe, _, loc) =>
+        val c = visitExp(fun)
+        SimplifiedAst.Expression.Con(con, c, tpe, loc)
 
       case TypedAst.Expression.Lazy(exp, tpe, loc) =>
         // Wrap the expression in a closure: () -> tpe & Pure
@@ -966,9 +970,9 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
         val e = visitExp(exp)
         SimplifiedAst.Expression.PutStaticField(field, e, tpe, loc)
 
-      case SimplifiedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case SimplifiedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        SimplifiedAst.Expression.NewChannel(e, tpe, loc)
+        SimplifiedAst.Expression.NewChannel(e, pol, tpe, loc)
 
       case SimplifiedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)
@@ -994,6 +998,10 @@ object Simplifier extends Phase[TypedAst.Root, SimplifiedAst.Root] {
       case SimplifiedAst.Expression.Spawn(exp, tpe, loc) =>
         val e = visitExp(exp)
         SimplifiedAst.Expression.Spawn(e, tpe, loc)
+
+      case SimplifiedAst.Expression.Con(con, fun, tpe, loc) =>
+        val e = visitExp(fun)
+        SimplifiedAst.Expression.Con(con, e, tpe, loc)
 
       case SimplifiedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)

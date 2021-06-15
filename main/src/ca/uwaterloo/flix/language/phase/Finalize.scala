@@ -334,10 +334,10 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
         val t = visitType(tpe)
         FinalAst.Expression.PutStaticField(field, e, t, loc)
 
-      case LiftedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case LiftedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visit(exp)
         val t = visitType(tpe)
-        FinalAst.Expression.NewChannel(e, t, loc)
+        FinalAst.Expression.NewChannel(e, pol, t, loc)
 
       case LiftedAst.Expression.GetChannel(exp, tpe, loc) =>
         val e = visit(exp)
@@ -365,6 +365,12 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
         val e = visit(exp)
         val t = visitType(tpe)
         FinalAst.Expression.Spawn(e, t, loc)
+
+      case LiftedAst.Expression.Con(con, fun, tpe, loc) =>
+        val f = visit(fun)
+        val conVal = visitType(con)
+        val t = visitType(tpe)
+        FinalAst.Expression.Con(conVal, f, t, loc)
 
       case LiftedAst.Expression.Lazy(exp, tpe, loc) =>
         val e = visit(exp)
@@ -411,6 +417,8 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
 
       case Some(tc) =>
         tc match {
+          case TypeConstructor.WildCard => MonoType.WildCard
+
           case TypeConstructor.Unit => MonoType.Unit
 
           case TypeConstructor.Null => MonoType.Unit
@@ -440,6 +448,8 @@ object Finalize extends Phase[LiftedAst.Root, FinalAst.Root] {
           case TypeConstructor.Array => MonoType.Array(args.head)
 
           case TypeConstructor.Channel => MonoType.Channel(args.head)
+
+          case TypeConstructor.WhiteList(names) => MonoType.WhiteList(names, args.head)
 
           case TypeConstructor.Lazy => MonoType.Lazy(args.head)
 

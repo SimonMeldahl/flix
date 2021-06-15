@@ -314,10 +314,8 @@ object Stratifier extends Phase[Root, Root] {
         case e => Expression.PutStaticField(field, e, tpe, eff, loc)
       }
 
-    case Expression.NewChannel(exp, tpe, eff, loc) =>
-      mapN(visitExp(exp)) {
-        case e => Expression.NewChannel(e, tpe, eff, loc)
-      }
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
+      visitExp(exp).map(e => Expression.NewChannel(e, pol, tpe, eff, loc))
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
       mapN(visitExp(exp)) {
@@ -350,6 +348,11 @@ object Stratifier extends Phase[Root, Root] {
     case Expression.Spawn(exp, tpe, eff, loc) =>
       mapN(visitExp(exp)) {
         case e => Expression.Spawn(e, tpe, eff, loc)
+      }
+
+    case Expression.Con(con, fun, tpe, eff, loc) =>
+      visitExp(fun) map {
+        case fun => Expression.Con(con, fun, tpe, eff, loc)
       }
 
     case Expression.Lazy(exp, tpe, loc) =>
@@ -589,7 +592,7 @@ object Stratifier extends Phase[Root, Root] {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       dependencyGraphOfExp(exp)
 
-    case Expression.NewChannel(exp, _, _, _) =>
+    case Expression.NewChannel(exp, _, _, _, _) =>
       dependencyGraphOfExp(exp)
 
     case Expression.GetChannel(exp, _, _, _) =>
@@ -610,6 +613,9 @@ object Stratifier extends Phase[Root, Root] {
 
     case Expression.Spawn(exp, _, _, _) =>
       dependencyGraphOfExp(exp)
+
+    case Expression.Con(_, fun, _, _, _) =>
+      dependencyGraphOfExp(fun)
 
     case Expression.Lazy(exp, _, _) =>
       dependencyGraphOfExp(exp)

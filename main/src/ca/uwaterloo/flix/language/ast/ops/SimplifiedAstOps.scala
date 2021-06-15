@@ -280,7 +280,7 @@ object SimplifiedAstOps {
         checkExp(exp, env0, ienv0)
         checkType(tpe)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
         checkExp(exp, env0, ienv0)
         checkType(tpe)
 
@@ -303,6 +303,11 @@ object SimplifiedAstOps {
 
       case Expression.Spawn(exp, tpe, loc) =>
         checkExp(exp, env0, ienv0)
+        checkType(tpe)
+
+      case Expression.Con(con, fun, tpe, loc) =>
+        checkType(con)
+        checkExp(fun, env0, ienv0)
         checkType(tpe)
 
       case Expression.Lazy(exp, tpe, loc) =>

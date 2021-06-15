@@ -234,8 +234,8 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
     case FinalAst.Expression.PutStaticField(field, exp, tpe, loc) =>
       ErasedAst.Expression.PutStaticField(field, visitExp(exp), visitTpe(tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
-    case FinalAst.Expression.NewChannel(exp, tpe, loc) =>
-      ErasedAst.Expression.NewChannel(visitExp(exp), visitTpe[PReference[PChan[T]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
+    case FinalAst.Expression.NewChannel(exp, pol, tpe, loc) =>
+      ErasedAst.Expression.NewChannel(visitExp(exp), pol, visitTpe[PReference[PChan[T]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
     case FinalAst.Expression.GetChannel(exp, tpe, loc) =>
       ErasedAst.Expression.GetChannel(visitExp(exp), visitTpe(tpe), loc)
@@ -252,6 +252,9 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
     case FinalAst.Expression.Spawn(exp, tpe, loc) =>
       ErasedAst.Expression.Spawn(visitExp(exp), visitTpe(tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
+    case FinalAst.Expression.Con(con, fun, tpe, loc) =>
+      ErasedAst.Expression.Con(visitTpe[PType](con), visitExp[PReference[PChan[PType]]](fun), visitTpe[PReference[PChan[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
+
     case FinalAst.Expression.Lazy(exp, tpe, loc) =>
       ErasedAst.Expression.Lazy(visitExp(exp), visitTpe[PReference[PLazy[PType]]](tpe), loc).asInstanceOf[ErasedAst.Expression[T]]
 
@@ -263,6 +266,8 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
 
     case FinalAst.Expression.MatchError(tpe, loc) =>
       ErasedAst.Expression.MatchError(visitTpe(tpe), loc)
+
+    case FinalAst.Expression.K(exp, from, to, con, tpe, loc) => ???
   }
 
   /**
@@ -275,6 +280,8 @@ object Eraser extends Phase[FinalAst.Root, FinalAst.Root] {
     * Translates the type 'tpe' to the ErasedType.
     */
   private def visitTpe[T <: PType](tpe: MonoType): EType[T] = (tpe match {
+    case MonoType.WildCard => Reference(Unit())
+    case MonoType.WhiteList(_, tpe) => Reference(Unit())
     case MonoType.Unit => Reference(Unit())
     case MonoType.Bool => Bool()
     case MonoType.Char => Char()

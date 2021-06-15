@@ -179,7 +179,7 @@ object LiftedAst {
 
     case class PutStaticField(field: Field, exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
-    case class NewChannel(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
+    case class NewChannel(exp: LiftedAst.Expression, policy: Option[TypeConstructor.WhiteList], tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
     case class GetChannel(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
@@ -188,6 +188,8 @@ object LiftedAst {
     case class SelectChannel(rules: List[LiftedAst.SelectChannelRule], default: Option[LiftedAst.Expression], tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
     case class Spawn(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
+
+    case class Con(con: Type, fun: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 
     case class Lazy(exp: LiftedAst.Expression, tpe: Type, loc: SourceLocation) extends LiftedAst.Expression
 

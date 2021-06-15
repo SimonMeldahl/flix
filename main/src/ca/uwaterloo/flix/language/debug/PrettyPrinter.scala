@@ -379,7 +379,7 @@ object PrettyPrinter {
           vt.text(" value ")
           visitExp(exp)
 
-        case Expression.NewChannel(exp, tpe, loc) =>
+        case Expression.NewChannel(exp, pol, tpe, loc) =>
           vt.text("Channel")
           vt.text(" ")
           visitExp(exp)
@@ -416,6 +416,10 @@ object PrettyPrinter {
         case Expression.Spawn(exp, tpe, loc) =>
           vt.text("spawn ")
           visitExp(exp)
+
+        case Expression.Con(con, fun, tpe, loc) =>
+          vt.text("con ")
+          visitExp(fun)
 
         case Expression.Lazy(exp, tpe, loc) =>
           vt.text("lazy ")

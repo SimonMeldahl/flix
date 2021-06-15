@@ -18,7 +18,7 @@ package ca.uwaterloo.flix.language.phase
 
 import ca.uwaterloo.flix.api.Flix
 import ca.uwaterloo.flix.language.ast.Ast.Denotation
-import ca.uwaterloo.flix.language.ast.ParsedAst.SelectFragment
+import ca.uwaterloo.flix.language.ast.ParsedAst.{Expression, SelectFragment}
 import ca.uwaterloo.flix.language.ast._
 import ca.uwaterloo.flix.language.errors.WeederError
 import ca.uwaterloo.flix.language.errors.WeederError._
@@ -1260,11 +1260,11 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
         case (e, rs) => WeededAst.Expression.TryCatch(e, rs, mkSL(sp1, sp2))
       }
 
-    // TODO SJ: Rewrite to Ascribe(newch, Channel[Int]), to remove the tpe (and get tvar like everything else)
-    // TODO SJ: Also do not allow function types (Arrow) when rewriting
-    case ParsedAst.Expression.NewChannel(sp1, tpe, exp, sp2) =>
+    case ParsedAst.Expression.NewChannel(sp1, tpe, exp, policy, sp2) =>
+      val pol = policy.map(p => visitType(p).asInstanceOf[WeededAst.Type.WhiteList])
+
       visitExp(exp) map {
-        case e => WeededAst.Expression.NewChannel(e, visitType(tpe), mkSL(sp1, sp2))
+        e => WeededAst.Expression.NewChannel(e, pol, visitType(tpe), mkSL(sp1, sp2))
       }
 
     case ParsedAst.Expression.GetChannel(sp1, exp, sp2) =>
@@ -1298,6 +1298,11 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     case ParsedAst.Expression.Spawn(sp1, exp, sp2) =>
       visitExp(exp) map {
         case e => WeededAst.Expression.Spawn(e, mkSL(sp1, sp2))
+      }
+
+    case ParsedAst.Expression.Con(sp1, con, fun, sp2) =>
+      visitExp(fun) map {
+        fun => WeededAst.Expression.Con(visitType(con), fun, mkSL(sp1, sp2))
       }
 
     case ParsedAst.Expression.Lazy(sp1, exp, sp2) =>
@@ -1876,6 +1881,12 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     * Weeds the given parsed type `tpe`.
     */
   private def visitType(tpe: ParsedAst.Type): WeededAst.Type = tpe match {
+
+    case ParsedAst.Type.WildCard(sp1, sp2) => WeededAst.Type.WildCard(mkSL(sp1, sp2))
+
+    case ParsedAst.Type.WhiteList(sp1, names, sp2) =>
+      WeededAst.Type.WhiteList(names, mkSL(sp1, sp2))
+
     case ParsedAst.Type.Unit(sp1, sp2) => WeededAst.Type.Unit(mkSL(sp1, sp2))
 
     case ParsedAst.Type.Var(sp1, ident, sp2) => WeededAst.Type.Var(ident, mkSL(sp1, sp2))
@@ -2336,11 +2347,12 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     case ParsedAst.Expression.Ascribe(e1, _, _, _) => leftMostSourcePosition(e1)
     case ParsedAst.Expression.Cast(e1, _, _, _) => leftMostSourcePosition(e1)
     case ParsedAst.Expression.TryCatch(sp1, _, _, _) => sp1
-    case ParsedAst.Expression.NewChannel(sp1, _, _, _) => sp1
+    case ParsedAst.Expression.NewChannel(sp1, _, _, _, _) => sp1
     case ParsedAst.Expression.GetChannel(sp1, _, _) => sp1
     case ParsedAst.Expression.PutChannel(e1, _, _) => leftMostSourcePosition(e1)
     case ParsedAst.Expression.SelectChannel(sp1, _, _, _) => sp1
     case ParsedAst.Expression.Spawn(sp1, _, _) => sp1
+    case ParsedAst.Expression.Con(sp1, _, _, _) => sp1
     case ParsedAst.Expression.Lazy(sp1, _, _) => sp1
     case ParsedAst.Expression.Force(sp1, _, _) => sp1
     case ParsedAst.Expression.FixpointConstraint(sp1, _, _) => sp1
@@ -2360,6 +2372,8 @@ object Weeder extends Phase[ParsedAst.Program, WeededAst.Program] {
     */
   @tailrec
   private def leftMostSourcePosition(tpe: ParsedAst.Type): SourcePosition = tpe match {
+    case ParsedAst.Type.WildCard(sp1, _) => sp1
+    case ParsedAst.Type.WhiteList(sp1, _, _) => sp1
     case ParsedAst.Type.Unit(sp1, _) => sp1
     case ParsedAst.Type.Var(sp1, _, _) => sp1
     case ParsedAst.Type.Ambiguous(sp1, _, _) => sp1

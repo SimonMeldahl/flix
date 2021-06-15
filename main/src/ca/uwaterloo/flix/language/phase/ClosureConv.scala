@@ -282,9 +282,9 @@ object ClosureConv extends Phase[Root, Root] {
       val e = visitExp(exp)
       Expression.PutStaticField(field, e, tpe, loc)
 
-    case Expression.NewChannel(exp, tpe, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, loc) =>
       val e = visitExp(exp)
-      Expression.NewChannel(e, tpe, loc)
+      Expression.NewChannel(e, pol, tpe, loc)
 
     case Expression.GetChannel(exp, tpe, loc) =>
       val e = visitExp(exp)
@@ -310,6 +310,10 @@ object ClosureConv extends Phase[Root, Root] {
     case Expression.Spawn(exp, tpe, loc) =>
       val e = visitExp(exp)
       Expression.Spawn(e, tpe, loc)
+
+    case Expression.Con(con, fun, tpe, loc) =>
+      val c = visitExp(fun)
+      Expression.Con(con, c, tpe, loc)
 
     case Expression.Lazy(exp, tpe, loc) =>
       val e = visitExp(exp)
@@ -408,7 +412,7 @@ object ClosureConv extends Phase[Root, Root] {
 
     case Expression.PutStaticField(field, exp, tpe, loc) => freeVars(exp)
 
-    case Expression.NewChannel(exp, tpe, loc) => freeVars(exp)
+    case Expression.NewChannel(exp, pol, tpe, loc) => freeVars(exp)
 
     case Expression.GetChannel(exp, tpe, loc) => freeVars(exp)
 
@@ -424,6 +428,9 @@ object ClosureConv extends Phase[Root, Root] {
       rs ++ d
 
     case Expression.Spawn(exp, tpe, loc) => freeVars(exp)
+
+    case Expression.Con(_, fun, _, _) =>
+      freeVars(fun)
 
     case Expression.Lazy(exp, tpe, loc) => freeVars(exp)
 
@@ -666,9 +673,9 @@ object ClosureConv extends Phase[Root, Root] {
         val e = visitExp(exp)
         Expression.PutStaticField(field, e, tpe, loc)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp)
-        Expression.NewChannel(e, tpe, loc)
+        Expression.NewChannel(e, pol, tpe, loc)
 
       case Expression.GetChannel(exp, tpe, loc) =>
         val e = visitExp(exp)
@@ -694,6 +701,9 @@ object ClosureConv extends Phase[Root, Root] {
       case Expression.Spawn(exp, tpe, loc) =>
         val e = visitExp(exp)
         Expression.Spawn(e, tpe, loc)
+
+      case Expression.Con(con, fun, tpe, loc) =>
+        Expression.Con(con, visitExp(fun), tpe, loc)
 
       case Expression.Lazy(exp, tpe, loc) =>
         val e = visitExp(exp)

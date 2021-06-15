@@ -865,7 +865,7 @@ object ParsedAst {
       * @param exp the size of the channel.
       * @param sp2 the position of the last character in the expression.
       */
-    case class NewChannel(sp1: SourcePosition, tpe: ParsedAst.Type, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
+    case class NewChannel(sp1: SourcePosition, tpe: ParsedAst.Type, exp: ParsedAst.Expression, policy: Option[ParsedAst.Type.WhiteList], sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
       * GetChannel Expression.
@@ -903,6 +903,8 @@ object ParsedAst {
       * @param sp2 the position of the last character in the expression.
       */
     case class Spawn(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
+
+    case class Con(sp1: SourcePosition, con: ParsedAst.Type, fun: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
       * Lazy Expression.
@@ -1203,6 +1205,10 @@ object ParsedAst {
   sealed trait Type
 
   object Type {
+
+    case class WildCard(sp1: SourcePosition, sp2: SourcePosition) extends ParsedAst.Type
+
+    case class WhiteList(sp1: SourcePosition, names: Seq[Name.NName], sp2: SourcePosition) extends ParsedAst.Type
 
     /**
       * Unit type.

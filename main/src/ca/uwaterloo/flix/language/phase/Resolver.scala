@@ -790,11 +790,13 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
             case (field, e) => ResolvedAst.Expression.PutStaticField(field, e, loc)
           }
 
-        case NamedAst.Expression.NewChannel(exp, tpe, loc) =>
+        case NamedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
+          val p = pol.map(p => TypeConstructor.WhiteList(p.names))
+
           for {
             t <- lookupType(tpe, ns0, root)
             e <- visit(exp, tenv0)
-          } yield ResolvedAst.Expression.NewChannel(e, t, loc)
+          } yield ResolvedAst.Expression.NewChannel(e, p, t, loc)
 
         case NamedAst.Expression.GetChannel(exp, tvar, loc) =>
           for {
@@ -833,6 +835,13 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
           for {
             e <- visit(exp, tenv0)
           } yield ResolvedAst.Expression.Spawn(e, loc)
+
+        case NamedAst.Expression.Con(con, fun, loc) =>
+          for {
+            con <- lookupType(con, ns0, root)
+            fun <- visit(fun, tenv0)
+          } yield ResolvedAst.Expression.Con(con, fun, loc)
+
 
         case NamedAst.Expression.Lazy(exp, loc) =>
           for {
@@ -1284,6 +1293,10 @@ object Resolver extends Phase[NamedAst.Root, ResolvedAst.Root] {
     * Resolves the given type `tpe0` in the given namespace `ns0`.
     */
   def lookupType(tpe0: NamedAst.Type, ns0: Name.NName, root: NamedAst.Root)(implicit recursionDepth: Int = 0): Validation[Type, ResolutionError] = tpe0 match {
+    case NamedAst.Type.WildCard(loc) => Type.mkWildCard(loc).toSuccess
+
+    case NamedAst.Type.WhiteList(names, loc) => Type.mkWhiteList(names, loc).toSuccess
+
     case NamedAst.Type.Var(tvar, loc) => tvar.toSuccess
 
     case NamedAst.Type.Unit(loc) => Type.mkUnit(loc).toSuccess

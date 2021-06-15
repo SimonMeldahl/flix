@@ -179,7 +179,7 @@ object WeededAst {
 
     case class PutStaticField(className: String, fieldName: String, exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
-    case class NewChannel(exp: WeededAst.Expression, tpe: WeededAst.Type, loc: SourceLocation) extends WeededAst.Expression
+    case class NewChannel(exp: WeededAst.Expression, policy: Option[WeededAst.Type.WhiteList], tpe: WeededAst.Type, loc: SourceLocation) extends WeededAst.Expression
 
     case class GetChannel(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
@@ -188,6 +188,8 @@ object WeededAst {
     case class SelectChannel(rules: List[WeededAst.SelectChannelRule], default: Option[WeededAst.Expression], loc: SourceLocation) extends WeededAst.Expression
 
     case class Spawn(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
+
+    case class Con(con: WeededAst.Type, fun: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class Lazy(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
@@ -301,6 +303,10 @@ object WeededAst {
   sealed trait Type
 
   object Type {
+
+    case class WildCard(loc: SourceLocation) extends WeededAst.Type
+
+    case class WhiteList(exp: Seq[Name.NName], loc: SourceLocation) extends WeededAst.Type
 
     case class Var(qname: Name.Ident, loc: SourceLocation) extends WeededAst.Type
 

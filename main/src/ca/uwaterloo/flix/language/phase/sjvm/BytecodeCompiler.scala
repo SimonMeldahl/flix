@@ -169,7 +169,7 @@ object BytecodeCompiler {
     case Expression.PutField(field, exp1, exp2, tpe, loc) => ???
     case Expression.GetStaticField(field, tpe, loc) => ???
     case Expression.PutStaticField(field, exp, tpe, loc) => ???
-    case Expression.NewChannel(exp, tpe, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, loc) =>
       WithSource[R](loc) ~
         pushNull
 
@@ -177,6 +177,7 @@ object BytecodeCompiler {
     case Expression.PutChannel(exp1, exp2, tpe, loc) => ???
     case Expression.SelectChannel(rules, default, tpe, loc) => ???
     case Expression.Spawn(exp, tpe, loc) => ???
+    case Expression.Con(con, fun, tpe, loc) => ???
     case Expression.Lazy(exp, tpe, loc) => ???
     case Expression.Force(exp, tpe, loc) => ???
     case Expression.FixpointConstraintSet(cs, tpe, loc) => ???

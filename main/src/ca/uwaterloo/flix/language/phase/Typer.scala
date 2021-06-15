@@ -1214,14 +1214,15 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
           resultEff = Type.Impure
         } yield (valueConstrs, resultTyp, resultEff)
 
-      case ResolvedAst.Expression.NewChannel(exp, declaredType, loc) =>
+      case ResolvedAst.Expression.NewChannel(exp, pol, declaredType, loc) =>
         //
         //  exp: Int @ _
         //  ---------------------------------
         //  channel exp : Channel[t] @ Impure
         //
+
         for {
-          (constrs, tpe, _) <- visitExp(exp)
+          (constrs, tpe, resultEff) <- visitExp(exp)
           lengthType <- unifyTypeM(tpe, Type.Int32, loc)
           resultTyp <- liftM(Type.mkChannel(declaredType))
           resultEff = Type.Impure
@@ -1284,6 +1285,13 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
           resultTyp = Type.Unit
           resultEff = Type.Impure
         } yield (constrs, resultTyp, resultEff)
+
+      case ResolvedAst.Expression.Con(con, fun, loc) =>
+        // TODO(LBS): con could be type checked
+        for {
+          conTpe <- liftM(con)
+          (funConstrs, funTpe, funEff) <- visitExp(fun)
+        } yield (funConstrs, funTpe, funEff)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         //
@@ -1757,10 +1765,10 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         val eff = Type.Impure
         TypedAst.Expression.PutStaticField(field, e, tpe, eff, loc)
 
-      case ResolvedAst.Expression.NewChannel(exp, tpe, loc) =>
+      case ResolvedAst.Expression.NewChannel(exp, pol, tpe, loc) =>
         val e = visitExp(exp, subst0)
         val eff = Type.Impure
-        TypedAst.Expression.NewChannel(e, Type.mkChannel(tpe), eff, loc)
+        TypedAst.Expression.NewChannel(e, pol, Type.mkChannel(tpe), eff, loc)
 
       case ResolvedAst.Expression.GetChannel(exp, tvar, loc) =>
         val e = visitExp(exp, subst0)
@@ -1789,6 +1797,10 @@ object Typer extends Phase[ResolvedAst.Root, TypedAst.Root] {
         val tpe = Type.Unit
         val eff = e.eff
         TypedAst.Expression.Spawn(e, tpe, eff, loc)
+
+      case ResolvedAst.Expression.Con(con, fun, loc) =>
+        val funVal = visitExp(fun, subst0)
+        TypedAst.Expression.Con(con, funVal, funVal.tpe, funVal.eff, loc)
 
       case ResolvedAst.Expression.Lazy(exp, loc) =>
         val e = visitExp(exp, subst0)

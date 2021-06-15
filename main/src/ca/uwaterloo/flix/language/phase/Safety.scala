@@ -189,7 +189,7 @@ object Safety extends Phase[Root, Root] {
     case Expression.PutStaticField(field, exp, tpe, eff, loc) =>
       visitExp(exp)
 
-    case Expression.NewChannel(exp, tpe, eff, loc) => visitExp(exp)
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp)
 
     case Expression.GetChannel(exp, tpe, eff, loc) => visitExp(exp)
 
@@ -205,6 +205,8 @@ object Safety extends Phase[Root, Root] {
       rs ++ d
 
     case Expression.Spawn(exp, tpe, eff, loc) => visitExp(exp)
+
+    case Expression.Con(con, fun, tpe, eff, loc) => visitExp(fun)
 
     case Expression.Lazy(exp, tpe, loc) => visitExp(exp)
 

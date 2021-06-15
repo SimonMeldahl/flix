@@ -571,7 +571,7 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       visitExp(exp, env0)
 
-    case Expression.NewChannel(exp, _, _, _) =>
+    case Expression.NewChannel(exp, _, _, _, _) =>
       visitExp(exp, env0)
 
     case Expression.GetChannel(exp, _, _, _) =>
@@ -612,6 +612,9 @@ object Redundancy extends Phase[TypedAst.Root, TypedAst.Root] {
       }
 
     case Expression.Spawn(exp, _, _, _) => visitExp(exp, env0)
+
+    case Expression.Con(_, fun, _, _, _) =>
+      visitExp(fun, env0)
 
     case Expression.Lazy(exp, _, _) =>
       // Remove the recursion context as `exp` will not necessarily be evaluated.

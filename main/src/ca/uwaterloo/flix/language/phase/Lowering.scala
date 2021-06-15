@@ -465,10 +465,10 @@ object Lowering extends Phase[Root, Root] {
       val t = visitType(tpe)
       Expression.PutStaticField(field, e, t, eff, loc)
 
-    case Expression.NewChannel(exp, tpe, eff, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
       val e = visitExp(exp)
       val t = visitType(tpe)
-      Expression.NewChannel(e, t, eff, loc)
+      Expression.NewChannel(e, pol, t, eff, loc)
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
       val e = visitExp(exp)
@@ -491,6 +491,12 @@ object Lowering extends Phase[Root, Root] {
       val e = visitExp(exp)
       val t = visitType(tpe)
       Expression.Spawn(e, t, eff, loc)
+
+    case Expression.Con(con, fun, tpe, eff, loc) =>
+      val e = visitExp(fun)
+      val contpe = visitType(con)
+      val t = visitType(tpe)
+      Expression.Con(contpe, e, t, eff, loc)
 
     case Expression.Lazy(exp, tpe, loc) =>
       val e = visitExp(exp)
@@ -1404,9 +1410,9 @@ object Lowering extends Phase[Root, Root] {
       val e = substExp(exp, subst)
       Expression.PutStaticField(field, e, tpe, eff, loc)
 
-    case Expression.NewChannel(exp, tpe, eff, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, eff, loc) =>
       val e = substExp(exp, subst)
-      Expression.NewChannel(e, tpe, eff, loc)
+      Expression.NewChannel(e, pol, tpe, eff, loc)
 
     case Expression.GetChannel(exp, tpe, eff, loc) =>
       val e = substExp(exp, subst)
@@ -1422,6 +1428,9 @@ object Lowering extends Phase[Root, Root] {
     case Expression.Spawn(exp, tpe, eff, loc) =>
       val e = substExp(exp, subst)
       Expression.Spawn(e, tpe, eff, loc)
+
+    case Expression.Con(con, fun, tpe, eff, loc) =>
+      Expression.Con(con, substExp(fun, subst), tpe, eff, loc)
 
     case Expression.Lazy(exp, tpe, loc) =>
       val e = substExp(exp, subst)

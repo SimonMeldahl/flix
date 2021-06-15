@@ -800,9 +800,16 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
         case e => NamedAst.Expression.PutStaticField(className, fieldName, e, loc)
       }
 
-    case WeededAst.Expression.NewChannel(exp, tpe, loc) =>
-      mapN(visitExp(exp, env0, uenv0, tenv0), visitType(tpe, uenv0, tenv0)) {
-        case (e, t) => NamedAst.Expression.NewChannel(e, t, loc)
+    case WeededAst.Expression.NewChannel(exp, policy, tpe, loc) =>
+      val pol = policy match {
+        case Some(pol) => visitType(pol, uenv0, tenv0) map {
+          pol => Some(pol.asInstanceOf[NamedAst.Type.WhiteList])
+        }
+        case None => None.toSuccess
+      }
+
+      mapN(visitExp(exp, env0, uenv0, tenv0), visitType(tpe, uenv0, tenv0), pol) {
+        (e, t, p) => NamedAst.Expression.NewChannel(e, p, t, loc)
       }
 
     case WeededAst.Expression.GetChannel(exp, loc) =>
@@ -840,6 +847,11 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     case WeededAst.Expression.Spawn(exp, loc) =>
       visitExp(exp, env0, uenv0, tenv0) map {
         case e => NamedAst.Expression.Spawn(e, loc)
+      }
+
+    case WeededAst.Expression.Con(con, fun, loc) =>
+      mapN(visitType(con, uenv0, tenv0), visitExp(fun, env0, uenv0, tenv0)) {
+        (con, fun) => NamedAst.Expression.Con(con, fun, loc)
       }
 
     case WeededAst.Expression.Lazy(exp, loc) =>
@@ -1068,6 +1080,11 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     * Names the given type `tpe` under the given environments `uenv0` and `tenv0`.
     */
   private def visitType(tpe0: WeededAst.Type, uenv0: UseEnv, tenv0: Map[String, Type.Var])(implicit flix: Flix): Validation[NamedAst.Type, NameError] = tpe0 match {
+
+    case WeededAst.Type.WildCard(loc) => NamedAst.Type.WildCard(loc).toSuccess
+
+    case WeededAst.Type.WhiteList(names, loc) => NamedAst.Type.WhiteList(names, loc).toSuccess
+
     case WeededAst.Type.Unit(loc) => NamedAst.Type.Unit(loc).toSuccess
 
     case WeededAst.Type.Var(ident, loc) =>
@@ -1288,7 +1305,7 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     case WeededAst.Expression.PutField(className, fieldName, exp1, exp2, loc) => freeVars(exp1) ++ freeVars(exp2)
     case WeededAst.Expression.GetStaticField(className, fieldName, loc) => Nil
     case WeededAst.Expression.PutStaticField(className, fieldName, exp, loc) => freeVars(exp)
-    case WeededAst.Expression.NewChannel(tpe, exp, loc) => freeVars(exp) // TODO exp is a Type. is this a bug?
+    case WeededAst.Expression.NewChannel(exp, pol, tpe, loc) => freeVars(exp) ++ pol.map(freeVars).getOrElse(Nil) ++ freeVars(tpe)
     case WeededAst.Expression.GetChannel(exp, loc) => freeVars(exp)
     case WeededAst.Expression.PutChannel(exp1, exp2, loc) => freeVars(exp1) ++ freeVars(exp2)
     case WeededAst.Expression.SelectChannel(rules, default, loc) =>
@@ -1299,6 +1316,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
       val defaultFreeVars = default.map(freeVars).getOrElse(Nil)
       rulesFreeVars ++ defaultFreeVars
     case WeededAst.Expression.Spawn(exp, loc) => freeVars(exp)
+    case WeededAst.Expression.Con(con, fun, loc) =>
+      freeVars(con) ++ freeVars(fun)
     case WeededAst.Expression.Lazy(exp, loc) => freeVars(exp)
     case WeededAst.Expression.Force(exp, loc) => freeVars(exp)
     case WeededAst.Expression.FixpointConstraintSet(cs, loc) => cs.flatMap(freeVarsConstraint)
@@ -1363,6 +1382,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     * Returns the free variables in the given type `tpe0`.
     */
   private def freeVars(tpe0: WeededAst.Type): List[Name.Ident] = tpe0 match {
+    case WeededAst.Type.WildCard(loc) => Nil
+    case WeededAst.Type.WhiteList(names, loc) => Nil
     case WeededAst.Type.Var(ident, loc) => ident :: Nil
     case WeededAst.Type.Ambiguous(qname, loc) => Nil
     case WeededAst.Type.Unit(loc) => Nil
@@ -1392,6 +1413,8 @@ object Namer extends Phase[WeededAst.Program, NamedAst.Root] {
     */
   private def freeVarsWithKind(tpe0: WeededAst.Type, tenv: Map[String, Type.Var])(implicit flix: Flix): List[(Name.Ident, Kind)] = {
     def visit(tpe0: WeededAst.Type, varKind: => Kind): List[(Name.Ident, Kind)] = tpe0 match {
+      case WeededAst.Type.WildCard(loc) => Nil
+      case WeededAst.Type.WhiteList(exp, loc) => Nil
       case WeededAst.Type.Var(ident, loc) =>
         if (tenv.contains(ident.name))
           Nil

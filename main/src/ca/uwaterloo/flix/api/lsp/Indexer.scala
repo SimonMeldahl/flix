@@ -279,7 +279,7 @@ object Indexer {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
 
-    case Expression.NewChannel(exp, _, _, _) =>
+    case Expression.NewChannel(exp, _, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
 
     case Expression.GetChannel(exp, _, _, _) =>
@@ -298,6 +298,9 @@ object Indexer {
 
     case Expression.Spawn(exp, _, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)
+
+    case Expression.Con(_, fun, _, _, _) =>
+      visitExp(fun) ++ Index.occurrenceOf(exp0)
 
     case Expression.Lazy(exp, _, _) =>
       visitExp(exp) ++ Index.occurrenceOf(exp0)

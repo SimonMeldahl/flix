@@ -45,7 +45,8 @@ object Options {
     xlinter = false,
     xnoboolunification = false,
     xnostratifier = false,
-    xstatistics = false
+    xstatistics = false,
+    xinterpreter = false
   )
 
   /**
@@ -115,7 +116,8 @@ case class Options(lib: LibLevel,
                    xlinter: Boolean,
                    xnoboolunification: Boolean,
                    xnostratifier: Boolean,
-                   xstatistics: Boolean
+                   xstatistics: Boolean,
+                   xinterpreter: Boolean
                   )
 
 /**

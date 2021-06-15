@@ -221,7 +221,7 @@ object VarNumbering extends Phase[Root, Root] {
 
       case Expression.PutStaticField(field, exp, tpe, loc) => visitExp(exp, i0)
 
-      case Expression.NewChannel(exp, tpe, loc) =>
+      case Expression.NewChannel(exp, pol, tpe, loc) =>
         visitExp(exp, i0)
 
       case Expression.GetChannel(exp, tpe, loc) =>
@@ -251,6 +251,9 @@ object VarNumbering extends Phase[Root, Root] {
 
       case Expression.Spawn(exp, tpe, loc) =>
         visitExp(exp, i0)
+
+      case Expression.Con(con, fun, _, _) =>
+        visitExp(fun, i0)
 
       case Expression.Lazy(exp, tpe, loc) =>
         visitExp(exp, i0)

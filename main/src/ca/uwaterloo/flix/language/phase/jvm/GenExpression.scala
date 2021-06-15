@@ -998,7 +998,7 @@ object GenExpression {
       // Push Unit on the stack.
       visitor.visitMethodInsn(INVOKESTATIC, JvmName.Runtime.Value.Unit.toInternalName, "getInstance", AsmOps.getMethodDescriptor(Nil, JvmType.Unit), false)
 
-    case Expression.NewChannel(exp, tpe, loc) =>
+    case Expression.NewChannel(exp, pol, tpe, loc) =>
       addSourceLine(visitor, loc)
       visitor.visitTypeInsn(NEW, JvmName.Channel.toInternalName)
       visitor.visitInsn(DUP)
@@ -1125,6 +1125,8 @@ object GenExpression {
       visitor.visitMethodInsn(INVOKESTATIC, JvmName.Runtime.Value.Unit.toInternalName, "getInstance",
         AsmOps.getMethodDescriptor(Nil, JvmType.Unit), false)
 
+    case Expression.Con(con, fun, tpe, loc) => throw InternalCompilerException(s"Unexpected expression: $exp0")
+
     case Expression.Lazy(exp, tpe, loc) =>
       // Add source line numbers for debugging.
       addSourceLine(visitor, loc)
@@ -1170,6 +1172,8 @@ object GenExpression {
     case Expression.MatchError(_, loc) =>
       addSourceLine(visitor, loc)
       AsmOps.compileThrowFlixError(visitor, JvmName.Runtime.MatchError, loc)
+
+    case Expression.K(exp, from, to, con, tpe, loc) => ???
   }
 
   /*

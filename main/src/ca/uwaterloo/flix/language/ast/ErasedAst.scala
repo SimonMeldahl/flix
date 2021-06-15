@@ -186,7 +186,7 @@ object ErasedAst {
 
     case class PutStaticField(field: Field, exp: ErasedAst.Expression[PType], tpe: EType[PReference[PUnit]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PUnit]]
 
-    case class NewChannel[T <: PType](exp: ErasedAst.Expression[PInt32], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
+    case class NewChannel[T <: PType](exp: ErasedAst.Expression[PInt32], policy: Option[TypeConstructor.WhiteList], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
 
     case class GetChannel[T <: PType](exp: ErasedAst.Expression[PReference[PChan[T]]], tpe: EType[T], loc: SourceLocation) extends ErasedAst.Expression[T]
 
@@ -195,6 +195,8 @@ object ErasedAst {
     case class SelectChannel[T <: PType](rules: List[ErasedAst.SelectChannelRule[T]], default: Option[ErasedAst.Expression[T]], tpe: EType[T], loc: SourceLocation) extends ErasedAst.Expression[T]
 
     case class Spawn(exp: ErasedAst.Expression[PType], tpe: EType[PReference[PUnit]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PUnit]]
+
+    case class Con[T <: PType](con: EType[PType], fun: ErasedAst.Expression[PReference[PChan[T]]], tpe: EType[PReference[PChan[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PChan[T]]]
 
     case class Lazy[T <: PType](exp: ErasedAst.Expression[T], tpe: EType[PReference[PLazy[T]]], loc: SourceLocation) extends ErasedAst.Expression[PReference[PLazy[T]]]
 

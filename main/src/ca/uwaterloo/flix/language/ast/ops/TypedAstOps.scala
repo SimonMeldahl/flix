@@ -193,7 +193,7 @@ object TypedAstOps {
       case Expression.PutStaticField(field, exp, tpe, eff, loc) =>
         visitExp(exp, env0)
 
-      case Expression.NewChannel(exp, tpe, eff, loc) => visitExp(exp, env0)
+      case Expression.NewChannel(exp, pol, tpe, eff, loc) => visitExp(exp, env0)
 
       case Expression.GetChannel(exp, tpe, eff, loc) => visitExp(exp, env0)
 
@@ -209,6 +209,8 @@ object TypedAstOps {
         rs ++ d
 
       case Expression.Spawn(exp, tpe, eff, loc) => visitExp(exp, env0)
+
+      case Expression.Con(con, fun, tpe, eff, loc) => visitExp(fun, env0)
 
       case Expression.Lazy(exp, tpe, loc) => visitExp(exp, env0)
 
@@ -377,11 +379,12 @@ object TypedAstOps {
     case Expression.PutField(_, exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.GetStaticField(_, _, _, _) => Set.empty
     case Expression.PutStaticField(_, exp, _, _, _) => sigSymsOf(exp)
-    case Expression.NewChannel(exp, _, _, _) => sigSymsOf(exp)
+    case Expression.NewChannel(exp, _, _, _, _) => sigSymsOf(exp)
     case Expression.GetChannel(exp, _, _, _) => sigSymsOf(exp)
     case Expression.PutChannel(exp1, exp2, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.SelectChannel(rules, default, _, _, _) => rules.flatMap(rule => sigSymsOf(rule.chan) ++ sigSymsOf(rule.exp)).toSet ++ default.toSet.flatMap(sigSymsOf)
     case Expression.Spawn(exp, _, _, _) => sigSymsOf(exp)
+    case Expression.Con(con, fun, tpe, eff, loc) => sigSymsOf(fun)
     case Expression.Lazy(exp, _, _) => sigSymsOf(exp)
     case Expression.Force(exp, _, _, _) => sigSymsOf(exp)
     case Expression.FixpointConstraintSet(_, _, _, _) => Set.empty
@@ -603,7 +606,7 @@ object TypedAstOps {
     case Expression.PutStaticField(_, exp, _, _, _) =>
       freeVars(exp)
 
-    case Expression.NewChannel(exp, _, _, _) =>
+    case Expression.NewChannel(exp, _, _, _, _) =>
       freeVars(exp)
 
     case Expression.GetChannel(exp, _, _, _) =>
@@ -620,6 +623,9 @@ object TypedAstOps {
 
     case Expression.Spawn(exp, _, _, _) =>
       freeVars(exp)
+
+    case Expression.Con(_, fun, _, _, _) =>
+      freeVars(fun)
 
     case Expression.Lazy(exp, _, _) =>
       freeVars(exp)

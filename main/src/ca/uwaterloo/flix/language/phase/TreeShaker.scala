@@ -260,7 +260,7 @@ object TreeShaker extends Phase[Root, Root] {
     case Expression.PutStaticField(_, exp, _, _) =>
       visitExp(exp)
 
-    case Expression.NewChannel(exp, _, _) =>
+    case Expression.NewChannel(exp, _, _, _) =>
       visitExp(exp)
 
     case Expression.GetChannel(exp, _, _) =>
@@ -276,6 +276,9 @@ object TreeShaker extends Phase[Root, Root] {
 
     case Expression.Spawn(exp, _, _) =>
       visitExp(exp)
+
+    case Expression.Con(con, fun, tpe, loc) =>
+      visitExp(fun)
 
     case Expression.Lazy(exp, _, _) =>
       visitExp(exp)
