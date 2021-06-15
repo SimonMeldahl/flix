@@ -235,6 +235,10 @@ object TypedAstOps {
 
       case Expression.FixpointProjectOut(_, exp, tpe, eff, loc) =>
         visitExp(exp, env0)
+
+      case Expression.LetRegion(_, exp, _, _, _) =>
+        visitExp(exp, env0)
+
     }
 
     /**
@@ -389,6 +393,7 @@ object TypedAstOps {
     case Expression.FixpointFilter(_, exp, _, _, _) => sigSymsOf(exp)
     case Expression.FixpointProjectIn(exp, _, _, _, _) => sigSymsOf(exp)
     case Expression.FixpointProjectOut(_, exp, _, _, _) => sigSymsOf(exp)
+    case Expression.LetRegion(_, exp, _, _, _) => sigSymsOf(exp)
   }
 
   /**
@@ -647,6 +652,9 @@ object TypedAstOps {
 
     case Expression.FixpointProjectOut(_, exp, _, _, _) =>
       freeVars(exp)
+
+    case Expression.LetRegion(sym, exp, _, _, _) =>
+      freeVars(exp) - sym
   }
 
   /**
