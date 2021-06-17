@@ -154,7 +154,7 @@ object Value {
   }
 
   sealed trait Channel extends Value {
-    // TODO(LBS): delete implicit loc or add prints to --debug
+
     def get(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef
 
     def tryGet(currentLabel: KLabel)(implicit loc: SourceLocation): AnyRef
@@ -287,7 +287,11 @@ object Value {
       this
     }
 
-    override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = ()
+    override def checkAccess(currentLabel: KLabel)(implicit loc: SourceLocation): Unit = {
+      def error(p: Policy, blamee: KLabel) = throw InternalRuntimeException(s"${kLabelString(currentLabel)} was not in policy list ${polsString(p)} BLAME ${kLabelString(blamee)} @$loc")
+      if (!polsContains(pols, currentLabel)) error(pols, currentLabel)
+    }
+
   }
 
   case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy, tpe: MonoType) extends Channel {
@@ -331,13 +335,7 @@ object Value {
       def error(p: Policy, blamee: KLabel) = throw InternalRuntimeException(s"${kLabelString(currentLabel)} was not in policy list ${polsString(p)} BLAME ${kLabelString(blamee)} @$loc")
 
       if (!polsContains(pols, currentLabel)) error(pols, to)
-      lit match {
-        case ChannelImpl(_, p@Some(_), _) =>
-          if (!polsContains(p, currentLabel))
-            error(p, from)
-        case ChannelImpl(_, None, _) => ()
-        case l: Guard => l.checkAccess(currentLabel)
-      }
+      lit.checkAccess(currentLabel)
     }
   }
 }

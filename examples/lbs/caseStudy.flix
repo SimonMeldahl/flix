@@ -2,8 +2,8 @@ use List.{range, foreach};
 use ToString.{toString};
 
 def main(_args: Array[String]): Int & Impure =
-  let connectionChannel = chan Channel[String] 100 restricted <Processor>;
-  let resultChannel = chan String 0 restricted <Processor>;
+  let connectionChannel = chan Channel[String] 100 restricted </, Processor>;
+  let resultChannel = chan String 0 restricted </, Processor>;
   foreach(_ -> spawn Processor.start(connectionChannel, resultChannel), range(0, 2));
   let connectionStarter = c -> {connectionChannel <- con(<Processor>[?], c); ()};
   foreach(_ -> spawn Producer.start(connectionStarter), range(0, 3));

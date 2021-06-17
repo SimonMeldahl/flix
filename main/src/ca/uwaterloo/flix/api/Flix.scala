@@ -28,7 +28,6 @@ import ca.uwaterloo.flix.util.vt.TerminalContext
 
 import java.nio.charset.Charset
 import java.nio.file.{Files, Path, Paths}
-import java.security.DrbgParameters.Capability
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
