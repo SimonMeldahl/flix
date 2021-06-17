@@ -292,6 +292,10 @@ object Value {
       if (!polsContains(pols, currentLabel)) error(pols, currentLabel)
     }
 
+    def checkAccessWithBlame(currentLabel: KLabel, blameLabel: KLabel)(implicit loc: SourceLocation): Unit = {
+      def error(p: Policy, blamee: KLabel) = throw InternalRuntimeException(s"${kLabelString(currentLabel)} was not in policy list ${polsString(p)} BLAME ${kLabelString(blamee)} @$loc")
+      if (!polsContains(pols, currentLabel)) error(pols, blameLabel)
+    }
   }
 
   case class Guard(lit: Channel, from: KLabel, to: KLabel, pols: Policy, tpe: MonoType) extends Channel {
@@ -335,7 +339,10 @@ object Value {
       def error(p: Policy, blamee: KLabel) = throw InternalRuntimeException(s"${kLabelString(currentLabel)} was not in policy list ${polsString(p)} BLAME ${kLabelString(blamee)} @$loc")
 
       if (!polsContains(pols, currentLabel)) error(pols, to)
-      lit.checkAccess(currentLabel)
+      lit match {
+        case c: ChannelImpl => c.checkAccessWithBlame(currentLabel, from)
+        case g: Guard => g.checkAccess(currentLabel)
+      }
     }
   }
 }
